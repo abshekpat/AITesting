@@ -1,8 +1,13 @@
 # AITesting
 
 Experiments in AI-assisted software testing using [CrewAI](https://github.com/crewAIInc/crewAI).
-The first agent is a **QA Engineer** that reads a feature description and generates
-a set of test cases for it.
+The crews use a Groq-hosted `gpt-oss-120b` model to perform QA tasks:
+
+- **Test Analyst** – reads a feature description and generates test cases.
+- **Bug Triage Crew** – pulls a bug from Jira and runs a multi-agent pipeline
+  that classifies it, finds the likely root cause, and recommends tests.
+- **Research & Writer Crew** – researches common web-app bug categories, then
+  writes a developer bug-prevention checklist.
 
 ## Project structure
 
@@ -12,14 +17,17 @@ AITesting/
 ├── README.md
 └── crewAI/
     └── MCP_Creation/
-        ├── Test_Analyst_Agent.py   # QA test-case generation crew
-        └── .env                    # API keys (not committed)
+        ├── Test_Analyst_Agent.py         # Single-agent: generates test cases
+        ├── Building_QABugTriageCrew.py    # Multi-agent: bug triage + RCA + tests
+        ├── Research_Write_AI_Agent.py      # Two-agent: research + prevention checklist
+        └── .env                           # API keys / secrets (not committed)
 ```
 
 ## Requirements
 
 - Python 3.13
 - A [Groq](https://console.groq.com) API key
+- (Bug Triage only) A Jira account with an API token
 
 ## Setup
 
@@ -28,51 +36,94 @@ AITesting/
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install "crewai" python-dotenv
+   pip install "crewai" python-dotenv requests
    ```
 
-2. Add your API key to `crewAI/MCP_Creation/.env`:
+2. Add your keys to `crewAI/MCP_Creation/.env`:
 
    ```
    GROQ_KEY=your_groq_api_key_here
+
+   # Required only for Building_QABugTriageCrew.py
+   JIRA_EMAIL=you@example.com
+   JIRA_API_TOKEN=your_jira_api_token
    ```
 
    This file is git-ignored and must never be committed.
 
 ## Running
 
+### Test Analyst — generate test cases
+
 ```bash
 cd crewAI/MCP_Creation
 python3 Test_Analyst_Agent.py
 ```
 
-The crew runs the QA Engineer agent and prints a numbered list of test cases
-to the terminal. To keep a copy, redirect the output to a file:
+Prints a numbered list of test cases to the terminal. To keep a copy:
 
 ```bash
 python3 Test_Analyst_Agent.py > test_cases.md
 ```
 
-## How it works
-
-`Test_Analyst_Agent.py` wires up a minimal CrewAI pipeline:
-
-1. **LLM** – a Groq-hosted `openai/gpt-oss-120b` model, keyed from `GROQ_KEY`.
-2. **Agent** – a senior QA Engineer persona.
-3. **Task** – "create 5–10 test cases", with the target feature described in
-   `expected_output` (currently the app.vwo.com login page).
-4. **Crew** – runs the agent against the task via `crew.kickoff()`.
-
 To test a different feature, edit the `description` and `expected_output` of
 `test_case_task`.
 
-## Note on the cache-breakpoint shim
+### Bug Triage Crew — classify, RCA, recommend tests
 
-The script monkey-patches `LLM._format_messages_for_provider` to strip CrewAI's
-`cache_breakpoint` marker before requests reach Groq. Groq's OpenAI-compatible
-API rejects that marker, and the installed CrewAI version (1.15.2) only strips
-it for native providers, not for the generic litellm path Groq uses. If a newer
-CrewAI release handles this, the shim can be removed.
+```bash
+cd crewAI/MCP_Creation
+python3 Building_QABugTriageCrew.py
+```
+
+The crew fetches a Jira ticket (the ID is set in the `fetch_jira_ticket(...)`
+call near the bottom of the file) and runs three specialists in sequence:
+
+1. **Bug Triage Analyst** – assigns severity (P0–P4), category, component, and
+   sprint priority.
+2. **Root Cause Analysis Specialist** – traces the issue through the UI → API →
+   Service → Database layers and suggests where to investigate.
+3. **Test Strategy Advisor** – recommends verification, regression, and edge-case
+   tests (Playwright/TypeScript style).
+
+Each task passes its output as context to the next via `context=[...]`, so later
+agents build on earlier findings.
+
+### Research & Writer Crew — bug-prevention checklist
+
+```bash
+cd crewAI/MCP_Creation
+python3 Research_Write_AI_Agent.py
+```
+
+Runs two agents in sequence:
+
+1. **QA Research Analyst** – lists the top 5 common web-app bug categories with
+   frequency, example, and impact for each.
+2. **QA Documentation Writer** – turns that research into a practical
+   "Bug Prevention Checklist" developers can review before opening a pull
+   request.
+
+Only needs `GROQ_KEY` — no Jira access required.
+
+## How it works
+
+Both scripts follow the same minimal CrewAI shape: define an **LLM**, one or more
+**Agents** (personas), **Tasks** (what to produce), and a **Crew** that runs them
+via `crew.kickoff()`. The Bug Triage crew adds a sequential `Process` and chains
+task context so agents collaborate.
+
+## Note on the cache-breakpoint workaround
+
+Groq's OpenAI-compatible API rejects the `cache_breakpoint` marker CrewAI attaches
+to chat messages, and the installed CrewAI version only strips it for native
+providers — not for the generic path Groq uses. Both scripts work around this:
+
+- `Test_Analyst_Agent.py` monkey-patches `LLM._format_messages_for_provider`.
+- `Building_QABugTriageCrew.py` and `Research_Write_AI_Agent.py` subclass `LLM`
+  as `GroqLLM` and strip the marker in `call()`.
+
+If a newer CrewAI release handles this, the workaround can be removed.
 
 ## Configuration notes
 
