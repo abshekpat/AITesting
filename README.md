@@ -57,13 +57,13 @@ AITesting/
 
 ```bash
 cd crewAI/MCP_Creation
-python3 Test_Analyst_Agent.py
+python3 01_Test_Analyst_Agent.py
 ```
 
 Prints a numbered list of test cases to the terminal. To keep a copy:
 
 ```bash
-python3 Test_Analyst_Agent.py > test_cases.md
+python3 01_Test_Analyst_Agent.py > test_cases.md
 ```
 
 To test a different feature, edit the `description` and `expected_output` of
@@ -73,7 +73,7 @@ To test a different feature, edit the `description` and `expected_output` of
 
 ```bash
 cd crewAI/MCP_Creation
-python3 Building_QABugTriageCrew.py
+python3 03_Building_QABugTriageCrew.py
 ```
 
 The crew fetches a Jira ticket (the ID is set in the `fetch_jira_ticket(...)`
@@ -93,7 +93,7 @@ agents build on earlier findings.
 
 ```bash
 cd crewAI/MCP_Creation
-python3 Research_Write_AI_Agent.py
+python3 02_Research_Write_AI_Agent.py
 ```
 
 Runs two agents in sequence:
