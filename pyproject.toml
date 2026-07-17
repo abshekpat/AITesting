@@ -1,0 +1,18 @@
+[project]
+name = "aitesting"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    # `litellm` is an optional extra, but crewai calls litellm.completion() at
+    # runtime — a lazy import, so a bare `crewai` install only fails once an
+    # agent runs. `mcp` extra pulls mcpadapt, which MCPServerAdapter needs.
+    "crewai[litellm]>=1.15.3",
+    "crewai-tools[mcp]>=1.15.3",
+    # Nothing imports fastapi directly. litellm reaches into its proxy module
+    # whenever MCP tools are attached to a completion call, and that import
+    # chain needs it.
+    "fastapi>=0.139.2",
+    "mcp>=1.26.0",
+    "python-dotenv>=1.2.2",
+    "requests>=2.34.2",
+]
