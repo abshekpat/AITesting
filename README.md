@@ -10,9 +10,13 @@ with Groq-hosted models doing the QA work:
   writes a developer bug-prevention checklist.
 - **QA Pipeline** – fetches a Jira ticket over MCP and generates a full test
   plan, detailed test cases, and Playwright automation scripts.
+- **Production QA Pipeline** – the QA Pipeline's successor: same Jira MCP
+  fetch, plus a Jira-importable CSV of the test cases and Playwright code
+  scaffolded straight into an Advanced Playwright Framework layout (Page
+  Object Model + Module pattern). Drivable from the CLI or a Streamlit UI.
 
-The first three use `gpt-oss-120b`. The QA Pipeline uses
-`llama-3.3-70b-versatile` — see [Model choice](#model-choice).
+The first three use `gpt-oss-120b`. The QA Pipeline and Production QA
+Pipeline use `llama-3.3-70b-versatile` — see [Model choice](#model-choice).
 
 ## Project structure
 
@@ -23,15 +27,26 @@ AITesting/
 ├── README.md
 ├── pyproject.toml                          # Dependencies
 ├── uv.lock                                 # Pinned versions (committed)
+├── ui/
+│   └── app.py                              # Streamlit UI for the Production QA Pipeline
 └── crewAI/
     ├── MCP_Creation/
     │   ├── 01_Test_Analyst_Agent.py        # Single-agent: generates test cases
     │   ├── 02_Research_Write_AI_Agent.py   # Two-agent: research + prevention checklist
     │   └── 03_Building_QABugTriageCrew.py  # Multi-agent: bug triage + RCA + tests
-    └── CrewAI_QA_Pipeline/
+    ├── CrewAI_QA_Pipeline/
+    │   ├── main.py                         # Entry point
+    │   ├── crew.py                         # 4-agent crew + Jira MCP wiring
+    │   └── output/                         # Generated artifacts (not committed)
+    └── CrewAI_production_QA_Pipeline/
         ├── main.py                         # Entry point
-        ├── crew.py                         # 4-agent crew + Jira MCP wiring
-        └── output/                         # Generated artifacts (not committed)
+        ├── crew.py                         # 4-agent crew + Jira MCP wiring + CSV/Playwright scaffolding
+        ├── docs/ARCHITECTURE.html          # Advanced Playwright Framework layer reference
+        ├── templates/
+        │   ├── testplan.md                 # 12-section test plan template
+        │   ├── jira_test_cases_header.csv  # Header row for the Jira-import CSV
+        │   └── playwright-framework/       # Framework boilerplate copied into every run's output
+        └── output/                         # Generated artifacts, one folder per ticket (not committed)
 ```
 
 A single `.env` at the repo root serves every script. `load_dotenv()` walks up
@@ -152,6 +167,47 @@ Results are written to `output/` (`test_plan.md`, `test_cases.md`,
 The MCP server exposes ~58 Jira tools, but every tool schema is added to the
 system prompt and eats the token budget. `crew.py` filters down to
 `jira_get_issue` and `jira_search`, which is all Agent 1 needs.
+
+### Production QA Pipeline — test plan, Jira-import CSV, Playwright framework
+
+```bash
+cd crewAI/CrewAI_production_QA_Pipeline
+uv run main.py AIT-2
+```
+
+Same four-agent shape as the QA Pipeline (Jira Analyst → Test Plan Writer →
+Test Case Writer → Playwright Coder), with three differences in what it
+produces per ticket, all written to `output/<ticket_id>/`:
+
+- `test_cases_jira.csv` – the test cases table converted to a CSV that
+  imports straight into Jira, using `templates/jira_test_cases_header.csv`
+  for the header row.
+- `advanced-playwright-framework/` – `templates/playwright-framework/` is
+  copied in as the scaffold (config, tsconfig, shared utils already in
+  place), and the Playwright Coder agent fills in `src/pages/`,
+  `src/modules/`, `src/tests/`, `src/api/`, and `src/fixtures/` per the
+  layer rules in `docs/ARCHITECTURE.html` — Page classes hold locators only,
+  Modules hold business logic on top of Pages, specs import `test`/`expect`
+  from the single `src/fixtures/index.ts`.
+- A per-ticket output folder rather than one shared `output/`, since the
+  Streamlit UI below can run several tickets in one session.
+
+Tasks don't use CrewAI's `output_file` (its path validator silently rewrites
+absolute paths to be CWD-relative); `run_crew()` writes every artifact
+itself from each task's raw output instead.
+
+#### Streamlit UI
+
+```bash
+uv run streamlit run ui/app.py
+```
+
+Enter one or more Jira ticket IDs (comma- or newline-separated) and the app
+runs the pipeline above once per ticket, then shows the output tree, previews
+the test plan and test cases, renders the CSV as a table, lists the generated
+Playwright files, and offers a download button for each artifact plus a zip
+of the whole per-ticket folder. The UI holds no pipeline logic itself — it
+only calls `crew.run_crew()` and displays what comes back.
 
 ## How it works
 

@@ -17,3 +17,4 @@ __pycache__/
 
 # Generated pipeline artifacts
 crewAI/CrewAI_QA_Pipeline/output/
+crewAI/CrewAI_production_QA_Pipeline/output/
