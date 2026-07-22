@@ -2,7 +2,7 @@
 
 Run with (from the repo root, inside the project venv):
 
-    streamlit run ui/app.py
+    streamlit run crewAI/CrewAI_production_QA_Pipeline/ui/app.py
 
 Enter one or more Jira ticket IDs (comma- or newline-separated). The
 pipeline in crewAI/CrewAI_production_QA_Pipeline/crew.py runs once per
@@ -21,8 +21,7 @@ from pathlib import Path
 
 import streamlit as st
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-PIPELINE_DIR = REPO_ROOT / "crewAI" / "CrewAI_production_QA_Pipeline"
+PIPELINE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_ROOT = PIPELINE_DIR / "output"
 
 sys.path.insert(0, str(PIPELINE_DIR))
