@@ -32,8 +32,6 @@ AITesting/
 ├── README.md
 ├── pyproject.toml                          # Dependencies
 ├── uv.lock                                 # Pinned versions (committed)
-├── ui/
-│   └── app.py                              # Streamlit UI for the Production QA Pipeline
 ├── DeepEval/
 │   └── Excercises/
 │       ├── test_01_Basic_Anwser_Relevancy.py         # AnswerRelevancy + Hallucination basics
@@ -50,6 +48,8 @@ AITesting/
     └── CrewAI_production_QA_Pipeline/
         ├── main.py                         # Entry point
         ├── crew.py                         # 4-agent crew + Jira MCP wiring + CSV/Playwright scaffolding
+        ├── ui/
+        │   └── app.py                      # Streamlit UI for this pipeline
         ├── docs/ARCHITECTURE.html          # Advanced Playwright Framework layer reference
         ├── templates/
         │   ├── testplan.md                 # 12-section test plan template
@@ -211,7 +211,7 @@ itself from each task's raw output instead.
 #### Streamlit UI
 
 ```bash
-uv run streamlit run ui/app.py
+uv run streamlit run crewAI/CrewAI_production_QA_Pipeline/ui/app.py
 ```
 
 Enter one or more Jira ticket IDs (comma- or newline-separated) and the app
