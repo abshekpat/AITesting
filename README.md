@@ -18,6 +18,11 @@ with Groq-hosted models doing the QA work:
 The first three use `gpt-oss-120b`. The QA Pipeline and Production QA
 Pipeline use `llama-3.3-70b-versatile` — see [Model choice](#model-choice).
 
+There's also `DeepEval/Excercises/`, a separate set of
+[DeepEval](https://github.com/confident-ai/deepeval) pytest exercises for
+LLM-output evaluation (answer relevancy, hallucination) — unrelated to the
+CrewAI pipelines above. See [DeepEval exercises](#deepeval-exercises).
+
 ## Project structure
 
 ```
@@ -29,6 +34,10 @@ AITesting/
 ├── uv.lock                                 # Pinned versions (committed)
 ├── ui/
 │   └── app.py                              # Streamlit UI for the Production QA Pipeline
+├── DeepEval/
+│   └── Excercises/
+│       ├── test_01_Basic_Anwser_Relevancy.py         # AnswerRelevancy + Hallucination basics
+│       └── test_02_Groq_Llama4_vs_Openrouter_Judge.py # Groq-answered, OpenRouter-judged test case
 └── crewAI/
     ├── MCP_Creation/
     │   ├── 01_Test_Analyst_Agent.py        # Single-agent: generates test cases
@@ -80,6 +89,9 @@ from each script's own directory, so both `MCP_Creation/` and
 
    # QA Pipeline only
    JIRA_URL=https://your-workspace.atlassian.net
+
+   # DeepEval exercises only — judges the LLM output on OpenRouter
+   OPENROUTER_API_KEY=your_openrouter_api_key
    ```
 
    This file is git-ignored and must never be committed.
@@ -209,6 +221,35 @@ Playwright files, and offers a download button for each artifact plus a zip
 of the whole per-ticket folder. The UI holds no pipeline logic itself — it
 only calls `crew.run_crew()` and displays what comes back.
 
+## DeepEval exercises
+
+```bash
+uv run pytest DeepEval/Excercises/
+```
+
+Two standalone pytest exercises using [DeepEval](https://github.com/confident-ai/deepeval)
+to evaluate LLM output — separate from the CrewAI pipelines above, and not
+using CrewAI at all:
+
+- **`test_01_Basic_Anwser_Relevancy.py`** – the fundamentals: an
+  `LLMTestCase` with a hardcoded input/output, scored against
+  `AnswerRelevancyMetric` and `HallucinationMetric`.
+- **`test_02_Groq_Llama4_vs_Openrouter_Judge.py`** – asks a real question of
+  a Groq-hosted model, then scores the answer with the same two metrics.
+
+Both need `GROQ_KEY` (or `GROQ_API_KEY`) and `OPENROUTER_API_KEY` in `.env`.
+The judge model is built explicitly as an `OpenRouterModel(...)` instance and
+passed to each metric via `model=`, rather than passing a plain model-name
+string — DeepEval's provider auto-routing reads its settings from the
+environment once, at the moment the `deepeval` pytest plugin is imported
+(before any test file runs), so an env var set inside the test file itself
+is always too late to affect that routing. Passing an explicit model
+instance sidesteps that entirely and works regardless of which env vars
+happen to be set at process start.
+
+`deepeval` is capped below 4.x in `pyproject.toml` — see
+[Dependency notes](#dependency-notes).
+
 ## How it works
 
 Every script follows the same minimal CrewAI shape: define an **LLM**, one or more
@@ -266,6 +307,12 @@ Also note that `crewai-tools` wraps its `mcp`, `mcp.types`, and `mcpadapt`
 imports in one `try/except ImportError`, so a missing `mcpadapt` reports
 *"You are missing the 'mcp' package"* even when `mcp` is installed fine. The
 `[mcp]` extra pulls in `mcpadapt`.
+
+- **`deepeval`** — capped below 4.x. `deepeval>=4.1.3` needs
+  `posthog>=7.0.0`, but `crewai`'s `chromadb` pin (`<1.2`) needs
+  `posthog<6.0.0`, so newer `deepeval` can't resolve alongside `crewai` in
+  this project. `3.9.6` works fine for the [DeepEval exercises](#deepeval-exercises),
+  just slower on some calls than 4.1.3 was.
 
 ## Configuration notes
 
