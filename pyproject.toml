@@ -16,4 +16,8 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "requests>=2.34.2",
     "streamlit>=1.59.2",
+    # Capped below 4.x: deepeval>=4.1.3 needs posthog>=7.0.0, but crewai's
+    # chromadb pin (<1.2) needs posthog<6.0.0 — newer deepeval is unresolvable
+    # alongside crewai in this project.
+    "deepeval>=3.9.6",
 ]
