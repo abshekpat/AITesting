@@ -1,0 +1,14 @@
+# local dashboard state — regenerated at runtime, not source
+dashboard/runs.jsonl
+dashboard/goldens_chatbot.json
+dashboard/goldens_rag.json
+dashboard/goldens_browserbash.json
+
+# deepeval cache / telemetry
+.deepeval/
+.deepeval-cache.json
+
+# scratch screenshots / playwright artifacts
+dash-*.png
+*.jpeg
+.playwright-mcp/

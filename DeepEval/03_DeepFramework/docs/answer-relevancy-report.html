@@ -1,0 +1,622 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Answer Relevancy — Golden Dataset Report · Chapter 19</title>
+<meta name="description" content="DeepEval AnswerRelevancyMetric run over 19 chatbot goldens — judge gpt-5-mini vs gpt-4o-mini, side by side." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:'JetBrains Mono','Fira Code',ui-monospace,Menlo,monospace;
+    --nav-h:57px; --r:8px; --rs:5px; --t:.14s ease;
+    --bg:#ffffff; --bg1:#f9fafb; --bg2:#f3f4f6;
+    --bd:#e5e7eb; --bd2:#d1d5db;
+    --tx:#111827; --tx2:#374151; --tx3:#6b7280; --tx4:#9ca3af;
+    --ac:#16a34a; --ach:#15803d; --ac-bg:#f0fdf4; --ac-bd:#bbf7d0; --ac-tx:#166534;
+    --nav-bg:rgba(255,255,255,.85);
+    --code-bg:#18181b; --code-bd:#27272a;
+    --shadow:0 1px 2px rgba(17,24,39,.04),0 8px 24px rgba(17,24,39,.06);
+    --blue:#2563eb; --amber:#d97706; --violet:#7c3aed; --teal:#0d9488; --red:#dc2626;
+    --amber-bg:#fffbeb; --amber-bd:#fde68a; --amber-tx:#92400e;
+    --red-bg:#fef2f2; --red-bd:#fecaca; --red-tx:#b91c1c;
+    --blue-bg:#eff6ff; --blue-bd:#bfdbfe; --blue-tx:#1d4ed8;
+    --violet-bg:#f5f3ff; --violet-bd:#ddd6fe; --violet-tx:#6d28d9;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--font);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--ac);text-decoration:none} a:hover{color:var(--ach)}
+  code,kbd{font-family:var(--mono)}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+  /* topbar */
+  .topbar{position:sticky;top:0;z-index:50;height:var(--nav-h);display:flex;align-items:center;
+    background:var(--nav-bg);backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--bd)}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;width:100%}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:.92rem}
+  .brand .mark{width:22px;height:22px;border-radius:6px;background:var(--ac);display:grid;place-items:center;color:#fff;font-weight:700;font-size:.8rem}
+  .brand .sep{color:var(--tx4);font-weight:400} .brand .ch{color:var(--tx3);font-weight:500}
+  .tb-right{display:flex;gap:8px;align-items:center}
+  .tb-pill{font-family:var(--mono);font-size:.7rem;color:var(--tx3);border:1px solid var(--bd);border-radius:999px;padding:4px 10px;background:var(--bg1)}
+
+  /* hero */
+  .hero{padding:46px 0 30px;border-bottom:1px solid var(--bd);
+    background:radial-gradient(800px 320px at 50% -40%,var(--ac-bg),transparent 70%)}
+  .eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ac);margin:0 0 10px;font-weight:500}
+  h1{font-size:clamp(1.7rem,4vw,2.4rem);line-height:1.1;margin:0 0 12px;letter-spacing:-.03em;font-weight:700}
+  h1 .mk{position:relative;color:var(--ach);white-space:nowrap}
+  h1 .mk::after{content:"";position:absolute;left:-2px;right:-2px;bottom:.08em;height:.32em;background:var(--ac);opacity:.2;border-radius:3px;z-index:-1}
+  .sub{color:var(--tx3);max-width:74ch;margin:0;font-size:1.02rem}
+  .runmeta{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .chip{font-family:var(--mono);font-size:.72rem;border:1px solid var(--bd);background:var(--bg1);color:var(--tx2);border-radius:999px;padding:5px 11px}
+  .chip b{color:var(--tx);font-weight:600}
+
+  section{padding:40px 0;border-top:1px solid var(--bd)}
+  section:first-of-type{border-top:none}
+  h2{font-size:1.35rem;margin:0 0 4px;letter-spacing:-.02em}
+  h2 .n{font-family:var(--mono);color:var(--tx4);font-size:.9rem;margin-right:8px}
+  .lead{color:var(--tx3);max-width:74ch;margin:0 0 22px;font-size:.95rem}
+
+  /* model cards */
+  .models{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.models{grid-template-columns:1fr}}
+  .mcard{border:1px solid var(--bd);border-radius:var(--r);padding:20px;background:var(--bg1);position:relative;overflow:hidden}
+  .mcard::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px}
+  .mcard.judge::before{background:var(--violet)} .mcard.target::before{background:var(--blue)}
+  .mcard .role{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600}
+  .mcard.judge .role{color:var(--violet-tx)} .mcard.target .role{color:var(--blue-tx)}
+  .mcard h3{margin:8px 0 2px;font-size:1.3rem;font-family:var(--mono);letter-spacing:-.02em}
+  .mcard .who{color:var(--tx3);font-size:.9rem;margin:0 0 14px}
+  .mcard dl{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:.86rem}
+  .mcard dt{color:var(--tx4);font-family:var(--mono);font-size:.74rem;text-transform:uppercase;letter-spacing:.04em}
+  .mcard dd{margin:0;color:var(--tx2)}
+  .mcard dd code{color:var(--violet-tx)} .mcard.target dd code{color:var(--blue-tx)}
+  .flowline{display:flex;align-items:center;justify-content:center;gap:10px;margin:14px 0 2px;color:var(--tx3);font-size:.84rem;font-family:var(--mono)}
+  .flowline .ar{color:var(--ac);font-weight:700}
+
+  /* summary */
+  .stat-row{display:flex;flex-wrap:wrap;gap:14px}
+  .stat{flex:1;min-width:120px;background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow)}
+  .stat .big{font-size:1.9rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .stat .lbl{font-size:.74rem;color:var(--tx4);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+  .c-green{color:var(--ac)} .c-red{color:var(--red)} .c-amber{color:var(--amber)} .c-violet{color:var(--violet)}
+
+  /* compare banner */
+  .cmp-banner{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;margin-top:20px;
+    border:1px solid var(--bd);border-radius:var(--r);padding:20px;background:var(--bg1)}
+  @media(max-width:680px){.cmp-banner{grid-template-columns:1fr;text-align:center}}
+  .cmp-side{display:flex;flex-direction:column;gap:4px}
+  .cmp-side .jm{font-family:var(--mono);font-size:.82rem;color:var(--tx3)}
+  .cmp-side .jv{font-size:1.5rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .cmp-side .ja{font-size:.8rem;color:var(--tx4);font-family:var(--mono)}
+  .cmp-arrow{font-size:1.4rem;color:var(--ac);text-align:center}
+  .cmp-arrow .d{display:block;font-size:.7rem;color:var(--ac-tx);font-family:var(--mono);margin-top:2px}
+
+  /* compare table */
+  .tbl-wrap{border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  th,td{text-align:left;padding:10px 13px;border-bottom:1px solid var(--bd);vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  th{font-family:var(--mono);font-size:.66rem;letter-spacing:.05em;text-transform:uppercase;color:var(--tx4);background:var(--bg1);white-space:nowrap}
+  tbody tr.flip{background:var(--ac-bg)}
+  .q{max-width:340px}
+  .scorecell{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .v{display:inline-block;font-family:var(--mono);font-size:.66rem;font-weight:700;padding:2px 7px;border-radius:999px;border:1px solid}
+  .v.pass{background:var(--ac-bg);border-color:var(--ac-bd);color:var(--ac-tx)}
+  .v.fail{background:var(--red-bg);border-color:var(--red-bd);color:var(--red-tx)}
+  .v.warn{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber-tx)}
+  .delta{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+  .delta.up{color:var(--ac)} .delta.flat{color:var(--tx4)} .delta.down{color:var(--red)}
+
+  /* detail cards */
+  .cards{display:flex;flex-direction:column;gap:14px}
+  .rc{border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;background:var(--bg1)}
+  .rc-head{display:flex;align-items:center;gap:10px;padding:13px 16px;border-bottom:1px solid var(--bd);flex-wrap:wrap}
+  .rc-idx{font-family:var(--mono);font-size:.7rem;color:var(--tx4);background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rs);padding:2px 7px}
+  .rc-q{font-weight:600;font-size:.98rem;flex:1;min-width:200px}
+  .io{padding:13px 16px;display:grid;grid-template-columns:auto 1fr;gap:8px 12px;font-size:.86rem;border-bottom:1px solid var(--bd)}
+  .io .k{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:var(--tx4);padding-top:2px}
+  .io .val{color:var(--tx2)}
+  .io .val.bot{color:var(--tx)}
+  .judges{display:grid;grid-template-columns:1fr 1fr;gap:0}
+  @media(max-width:680px){.judges{grid-template-columns:1fr}}
+  .jp{padding:14px 16px}
+  .jp+.jp{border-left:1px solid var(--bd)}
+  @media(max-width:680px){.jp+.jp{border-left:none;border-top:1px solid var(--bd)}}
+  .jp-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+  .jp-name{font-family:var(--mono);font-size:.74rem;color:var(--tx3)}
+  .jp-name.new{color:var(--violet-tx);font-weight:600}
+  .gauge{position:relative;height:10px;background:var(--bg2);border:1px solid var(--bd);border-radius:999px;margin:6px 0 8px;overflow:visible}
+  .gauge-fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px}
+  .gauge-thr{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--tx3);left:70%}
+  .jp-score{font-family:var(--mono);font-weight:700;font-size:1.1rem;font-variant-numeric:tabular-nums}
+  .jp-reason{font-size:.84rem;color:var(--tx3);margin:6px 0 0;line-height:1.5}
+
+  .note{border-left:3px solid var(--amber);background:var(--amber-bg);padding:12px 16px;border-radius:0 var(--rs) var(--rs) 0;color:var(--tx2);font-size:.9rem;margin-top:8px}
+  .note.green{border-color:var(--ac);background:var(--ac-bg);color:var(--ac-tx)}
+  .note.violet{border-color:var(--violet);background:var(--violet-bg);color:var(--violet-tx)}
+  .note code{color:var(--violet-tx)} .note b{color:var(--tx)}
+
+  footer{padding:32px 0 60px;color:var(--tx4);font-size:.84rem;text-align:center;border-top:1px solid var(--bd)}
+</style>
+</head>
+<body>
+
+<div class="topbar"><div class="wrap">
+  <div class="brand"><span class="mark">T</span> The Testing Academy <span class="sep">/</span> <span class="ch">Chapter 19 · Answer Relevancy</span></div>
+  <div class="tb-right">
+    <a class="tb-pill" href="index.html">← Overview</a>
+    <span class="tb-pill">deepeval 3.9.9</span>
+  </div>
+</div></div>
+
+<header class="hero"><div class="wrap">
+  <p class="eyebrow">Metric #1 · AnswerRelevancyMetric · Golden Dataset Run</p>
+  <h1>Answer Relevancy on 19 goldens — judged by <span class="mk" id="h-judge">gpt-5-mini</span></h1>
+  <p class="sub">A live run of DeepEval's <code>AnswerRelevancyMetric</code> against the ShopSphere chatbot, with every golden scored by the judge LLM and the result documented case by case. The same run is shown <strong>side by side</strong> against the earlier <code>gpt-4o-mini</code> judge so you can see exactly what the judge upgrade changed.</p>
+  <div class="runmeta" id="runmeta"></div>
+</div></header>
+
+<div class="wrap">
+
+  <!-- WHO -->
+  <section>
+    <h2><span class="n">A</span>What's being tested, and who's judging</h2>
+    <p class="lead">Two different LLMs play two different roles. The <strong>model under test</strong> generates the answers; the <strong>judge LLM</strong> grades them. They are never the same model — that separation is the whole point of LLM-as-judge.</p>
+    <div class="models" id="models"></div>
+    <div class="note" id="metric-note"></div>
+  </section>
+
+  <!-- SUMMARY + COMPARE -->
+  <section>
+    <h2><span class="n">B</span>Result &amp; the judge upgrade, side by side</h2>
+    <p class="lead">Same chatbot, same 19 goldens, same threshold (0.7). Only the judge model changed. The newer judge reverses six false failures.</p>
+    <div class="stat-row" id="stats"></div>
+    <div class="cmp-banner" id="cmp-banner"></div>
+  </section>
+
+  <!-- SIDE BY SIDE TABLE -->
+  <section>
+    <h2><span class="n">C</span>Per-golden scores — both judges</h2>
+    <p class="lead">Green rows = verdict flipped (the older judge failed a correct answer). Δ is gpt-5-mini minus gpt-4o-mini.</p>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>#</th><th class="q">Question</th><th>gpt-4o-mini</th><th>gpt-5-mini</th><th>Δ</th></tr></thead>
+      <tbody id="cmp-rows"></tbody>
+    </table></div>
+  </section>
+
+  <!-- DETAIL -->
+  <section>
+    <h2><span class="n">D</span>Case-by-case detail</h2>
+    <p class="lead">Each golden: the question, the golden's expected answer, the chatbot's live reply, then both judges' score + reason for that reply.</p>
+    <div class="cards" id="detail"></div>
+  </section>
+
+  <!-- WHY -->
+  <section>
+    <h2><span class="n">E</span>How to read the failures</h2>
+    <div class="note violet"><b>The metric is referenceless.</b> <code>AnswerRelevancyMetric</code> scores only how on-topic the reply is for the question — it never reads the golden <code>expected_output</code>. So a "fail" here means "the reply added something the question didn't ask for," not "the reply is wrong." To grade against the golden answer, use a correctness G-Eval metric that consumes <code>expected_output</code>.</div>
+    <div class="note green" style="margin-top:10px"><b>Why gpt-5-mini scores higher.</b> The remaining 4 fails are genuine verbosity (the bot bundles an extra sentence — free-shipping note, customs note, price on a "specs" question). The six cases that flipped were <em>correct</em> answers the older <code>gpt-4o-mini</code> judge mis-scored to 0.0–0.5 with self-contradicting reasons. The judge upgrade fixed judge noise, not the chatbot.</div>
+  </section>
+
+</div>
+
+<footer><div class="wrap">
+  The Testing Academy · Chapter 19 · DeepEval Framework · AnswerRelevancyMetric over 19 chatbot goldens<br/>
+  Judge: OpenAI gpt-5-mini · Model under test: Groq llama-3.3-70b-versatile · deepeval 3.9.9
+</div></footer>
+
+<script type="application/json" id="run-data">{
+  "judge": {
+    "provider": "openai",
+    "model": "openai/gpt-5-mini"
+  },
+  "target": {
+    "name": "ShopSphere Chatbot",
+    "model": "llama-3.3-70b-versatile",
+    "port": 8201,
+    "framework": "React + FastAPI"
+  },
+  "metric": "AnswerRelevancyMetric",
+  "metric_note": "Referenceless \u2014 scores how on-topic actual_output is for input. Does NOT read expected_output.",
+  "threshold": 0.7,
+  "direction": "higher is better",
+  "deepeval_version": "3.9.9",
+  "results": [
+    {
+      "idx": 1,
+      "input": "What is your refund window?",
+      "expected": "Refunds are processed within 7 business days of receiving the returned item. Returns must be initiated within 30 days of delivery.",
+      "actual": "Our refund window is within 7 business days of receiving the returned item. Refunds are issued to the original payment method.",
+      "score": 0.5,
+      "success": false,
+      "reason": "The score is 0.50 because the response talked about refunds but focused on the refund payment method (returning to the original payment method) which is irrelevant to the user\u2019s question about the refund window; it partially relates to refunds so it\u2019s not zero, but it omitted any timeframe/eligibility window so it cannot receive a higher score.",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the response included information about the return policy, which is not directly related to the specific question about the refund window.",
+      "delta": 0.0
+    },
+    {
+      "idx": 2,
+      "input": "How long does standard shipping take?",
+      "expected": "Standard shipping is free on orders over $50 and takes 5-7 business days inside the US.",
+      "actual": "Standard shipping takes 5-7 business days inside the US. It's also free on orders over $50.",
+      "score": 0.5,
+      "success": false,
+      "reason": "The score is 0.50 because the response included some relevant information about standard shipping duration but also contained an irrelevant statement about free shipping over $50 (shipping cost/eligibility) that does not answer how long standard shipping takes; that irrelevant content reduced the relevancy, while the correct duration details that were present keep the score from being lower.",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the output included an irrelevant statement about free shipping, which does not address the question of how long standard shipping takes.",
+      "delta": 0.0
+    },
+    {
+      "idx": 3,
+      "input": "Tell me about the SP-EARBUDS-01.",
+      "expected": "The ShopSphere Wireless Earbuds (SP-EARBUDS-01) cost $79, use Bluetooth 5.3, deliver up to 30 hours of battery, and are IPX4 rated.",
+      "actual": "The SP-EARBUDS-01 is the ShopSphere Wireless Earbuds, priced at $79. They feature Bluetooth 5.3, a 30hr battery, and are IPX4 rated.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the output contained no irrelevant statements and directly addressed the request; it is already maximal so it cannot be higher.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the inquiry about the SP-EARBUDS-01 without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 4,
+      "input": "How do I reset my password?",
+      "expected": "You can reset your password at shopsphere.com/account/reset.",
+      "actual": "To reset your password, go to shopsphere.com/account/reset.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the answer fully and directly addressed how to reset a password with no irrelevant statements; there is nothing extraneous to remove, so the score cannot be higher than a perfect 1.00.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about resetting a password without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 5,
+      "input": "Can I return underwear?",
+      "expected": "No. Underwear is non-returnable, along with final sale and personalized items.",
+      "actual": "No, underwear is non-returnable according to our return policy.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response directly addresses the question with no irrelevant statements; there are zero irrelevant items, and 1.00 is the maximum so it cannot be higher.",
+      "old_score": 0.0,
+      "old_success": false,
+      "old_reason": "The score is 0.00 because the output included an irrelevant statement about the return policy for underwear, which directly addresses the question but does not provide a clear answer to whether it can be returned.",
+      "delta": 1.0
+    },
+    {
+      "idx": 6,
+      "input": "What is express shipping?",
+      "expected": "Express shipping costs $9.99 and arrives in 2-3 business days.",
+      "actual": "Express shipping takes 2-3 business days and costs $9.99. Orders placed before 12pm ET ship the same day on weekdays.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response contained no irrelevant statements and directly addressed the question about express shipping. It can't be higher because 1.00 is the maximum possible score.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about express shipping without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 7,
+      "input": "Can I pay with cryptocurrency?",
+      "expected": "I don't have information about cryptocurrency payments. Please contact support@shopsphere.com.",
+      "actual": "We don't have information on cryptocurrency payment options. For questions about payment methods, please contact our support team at support@shopsphere.com.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response directly and fully addressed the question 'Can I pay with cryptocurrency?' with no irrelevant statements; 1.00 is the maximum possible score.",
+      "old_score": 0.0,
+      "old_success": false,
+      "old_reason": "The score is 0.00 because the output fails to address the question about cryptocurrency payment options and instead redirects to human support, which is irrelevant to the inquiry.",
+      "delta": 1.0
+    },
+    {
+      "idx": 8,
+      "input": "Tell me about the SP-FAKE-99.",
+      "expected": "I don't have information on that product (SP-FAKE-99).",
+      "actual": "I don't have information on the SP-FAKE-99. If you're looking for details on a specific product, I can try to help with items from our catalog, such as the SP-EARBUDS-01 or SP-HOODIE-CL.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the output contained no irrelevant statements and fully addressed the request; it cannot be higher because 1.00 is the maximum possible score\u2014well done.",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the output lacks specific information on the SP-FAKE-99, which is crucial for a higher relevancy score.",
+      "delta": 0.5
+    },
+    {
+      "idx": 9,
+      "input": "How long does international shipping take?",
+      "expected": "International shipping takes 10-14 business days, and customs fees are the buyer's responsibility.",
+      "actual": "International shipping takes 10-14 business days. Customs fees are the buyer's responsibility.",
+      "score": 0.5,
+      "success": false,
+      "reason": "The score is 0.50 because the response included an irrelevant statement about customs fees and buyer responsibility instead of focusing on transit times, which reduces relevance. It isn't lower because the rest of the reply did address international shipping duration to some extent, so the answer retained partial relevance.",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the output included an irrelevant statement that did not address the duration of international shipping, which is the core of the question.",
+      "delta": 0.0
+    },
+    {
+      "idx": 10,
+      "input": "If I order in the morning, does it ship today?",
+      "expected": "Orders placed before 12pm ET ship the same day on weekdays.",
+      "actual": "If you order before 12pm ET on a weekday, your order will ship the same day.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the output directly addressed the shipping-today question with no irrelevant information; it can't be higher because 1.00 is the maximum possible score.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about shipping without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 11,
+      "input": "Will I get my original shipping cost back if I return an item?",
+      "expected": "Original shipping costs are non-refundable unless the return is due to our error.",
+      "actual": "Original shipping costs are non-refundable unless the return is due to our error. Refunds are issued to the original payment method within 7 business days of receiving the returned item.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the output fully and directly addressed the question with no irrelevant statements; relevance is already perfect, so it cannot be higher than the maximum.",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the response failed to address the question about getting the original shipping cost back, which is a key aspect of the inquiry.",
+      "delta": 0.5
+    },
+    {
+      "idx": 12,
+      "input": "Can I get a refund on a digital download?",
+      "expected": "Digital goods are non-refundable once downloaded.",
+      "actual": "No, digital goods are non-refundable once downloaded, according to our refund policy.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response contained no irrelevant statements and fully addressed the refund-on-digital-download question; it can't be higher because 1.00 is the maximum possible score. Nicely focused and on-topic.",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the response included an irrelevant statement about digital goods being non-refundable once downloaded, which does not directly address the question about obtaining a refund on a digital download.",
+      "delta": 0.5
+    },
+    {
+      "idx": 13,
+      "input": "Who pays for return shipping?",
+      "expected": "Return shipping is free for defective items; otherwise the buyer pays return shipping.",
+      "actual": "The buyer pays for return shipping unless the item is defective, in which case return shipping is free.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response directly and succinctly addressed who pays for return shipping with no irrelevant statements; there was nothing off-topic. It cannot be higher than 1.00 since that is a perfect relevancy score.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about who pays for return shipping without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 14,
+      "input": "How will my refund be paid back to me?",
+      "expected": "Refunds are issued to the original payment method.",
+      "actual": "Refunds are issued to the original payment method within 7 business days of receiving the returned item.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response directly and fully addressed how your refund will be paid, contained no irrelevant statements, and stayed focused on the question; it can't be higher because 1.00 is the maximum possible score.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about the refund payment method without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 15,
+      "input": "How do I turn on two-factor authentication?",
+      "expected": "Two-factor authentication can be enabled in your account settings.",
+      "actual": "To enable two-factor authentication, sign in to your account and go to your account settings. You can enable two-factor auth from there.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response directly and fully addressed how to turn on two-factor authentication with no irrelevant content; it can't be higher because 1.00 is the maximum.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about turning on two-factor authentication without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 16,
+      "input": "Where can I see my past orders?",
+      "expected": "Your order history is available under \"My Orders\" after you sign in.",
+      "actual": "You can view your order history under \"My Orders\" after signing in to your account on shopsphere.com.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the response directly answers where to view past orders, contains no irrelevant statements, and is clear and concise; it can't be higher because 1.00 is the maximum. Great job!",
+      "old_score": 0.5,
+      "old_success": false,
+      "old_reason": "The score is 0.50 because the response included irrelevant information about signing in to the account, which does not directly address the question about viewing past orders.",
+      "delta": 0.5
+    },
+    {
+      "idx": 17,
+      "input": "Tell me about the SP-HOODIE-CL.",
+      "expected": "The ShopSphere Classic Hoodie (SP-HOODIE-CL) costs $49, is 80% cotton / 20% polyester, and comes in sizes XS-XXL.",
+      "actual": "The SP-HOODIE-CL is the ShopSphere Classic Hoodie, priced at $49. It's made of 80% cotton and 20% polyester, and is available in sizes XS-XXL.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the output contained no irrelevant statements and directly addressed the request about the SP-HOODIE-CL; it cannot be higher because 1.00 is the maximum possible score.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addressed the inquiry about the SP-HOODIE-CL without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 18,
+      "input": "How much is the SP-MUG-CER and is it dishwasher safe?",
+      "expected": "The ShopSphere Ceramic Mug (SP-MUG-CER) is a 12oz mug priced at $14 and is dishwasher-safe.",
+      "actual": "The ShopSphere Ceramic Mug (SP-MUG-CER) is $14. It is dishwasher-safe.",
+      "score": 1.0,
+      "success": true,
+      "reason": "The score is 1.00 because the output contained no irrelevant statements and directly addressed the SP-MUG-CER\u2019s price and dishwasher safety; it cannot be higher because 1.00 is the maximum score.",
+      "old_score": 1.0,
+      "old_success": true,
+      "old_reason": "The score is 1.00 because the response directly addresses the question about the SP-MUG-CER's price and dishwasher safety without any irrelevant statements.",
+      "delta": 0.0
+    },
+    {
+      "idx": 19,
+      "input": "What are the specs of the SP-LAMP-LED?",
+      "expected": "The ShopSphere LED Desk Lamp (SP-LAMP-LED) costs $39, has 3 brightness levels, and uses USB-C.",
+      "actual": "The ShopSphere LED Desk Lamp (SP-LAMP-LED) has 3 brightness levels and a USB-C connection. It's priced at $39.",
+      "score": 0.6667,
+      "success": false,
+      "reason": "The score is 0.67 because the response provided the requested technical specifications (optical, electrical, mechanical details) but included an irrelevant price mention\u2014price is not a technical spec\u2014so that extra nontechnical information reduced the relevancy.",
+      "old_score": 0.0,
+      "old_success": false,
+      "old_reason": "The score is 0.00 because the output included irrelevant statements about brightness levels, USB-C connections, and pricing that did not address the specifications of the SP-LAMP-LED.",
+      "delta": 0.6667
+    }
+  ],
+  "summary": {
+    "total": 19,
+    "passed": 15,
+    "failed": 4,
+    "errors": 0,
+    "avg": 0.904,
+    "elapsed_s": 185.3
+  },
+  "judge_old": {
+    "provider": "openai",
+    "model": "openai/gpt-4o-mini"
+  },
+  "judge_new": {
+    "provider": "openai",
+    "model": "openai/gpt-5-mini"
+  },
+  "summary_old": {
+    "passed": 9,
+    "failed": 10,
+    "avg": 0.658
+  },
+  "summary_new": {
+    "passed": 15,
+    "failed": 4,
+    "avg": 0.904
+  },
+  "verdict_flips": 6
+}</script>
+<script>
+  const DATA = JSON.parse(document.getElementById('run-data').textContent);
+  const short = m => (m||'').split('/').pop();
+  const pct = s => Math.round((s||0)*100);
+  const cls = r => r.success ? 'pass' : (r.score>=0.5 ? 'warn' : 'fail');
+  const clsOld = r => r.old_success ? 'pass' : ((r.old_score||0)>=0.5 ? 'warn' : 'fail');
+  const fillColor = (score,ok) => ok ? 'var(--ac)' : (score>=0.5 ? 'var(--amber)' : 'var(--red)');
+
+  // hero
+  document.getElementById('h-judge').textContent = short(DATA.judge.model);
+  document.getElementById('runmeta').innerHTML = [
+    ['Run date','2026-06-21'],
+    ['Metric', DATA.metric],
+    ['Threshold','≥ '+DATA.threshold+' (higher is better)'],
+    ['Goldens', DATA.summary.total],
+    ['deepeval', DATA.deepeval_version],
+    ['Elapsed', DATA.summary.elapsed_s+'s'],
+  ].map(([k,v])=>`<span class="chip">${k} · <b>${v}</b></span>`).join('');
+
+  // models
+  document.getElementById('models').innerHTML = `
+    <div class="mcard target">
+      <div class="role">Model under test</div>
+      <h3>${DATA.target.model}</h3>
+      <p class="who">${DATA.target.name}</p>
+      <dl>
+        <dt>provider</dt><dd>Groq (OpenAI-compatible)</dd>
+        <dt>role</dt><dd>generates the answers</dd>
+        <dt>stack</dt><dd>${DATA.target.framework}</dd>
+        <dt>endpoint</dt><dd><code>localhost:${DATA.target.port}/chat</code></dd>
+      </dl>
+    </div>
+    <div class="mcard judge">
+      <div class="role">Judge LLM</div>
+      <h3>${short(DATA.judge.model)}</h3>
+      <p class="who">OpenAI · scores every reply 0.00–1.00 + reason</p>
+      <dl>
+        <dt>provider</dt><dd>${DATA.judge.provider}</dd>
+        <dt>role</dt><dd>grades relevancy of the answer</dd>
+        <dt>via</dt><dd><code>JUDGE_PROVIDER=openai</code></dd>
+        <dt>model env</dt><dd><code>JUDGE_MODEL_OPENAI=gpt-5-mini</code></dd>
+      </dl>
+    </div>`;
+  document.getElementById('metric-note').innerHTML =
+    `<b>Metric:</b> <code>${DATA.metric}</code> — ${DATA.metric_note}`;
+
+  // stats
+  const s = DATA.summary;
+  document.getElementById('stats').innerHTML = [
+    ['big c-green', s.passed, 'Passed'],
+    ['big c-red', s.failed, 'Failed'],
+    ['big c-violet', s.avg.toFixed(3), 'Avg score'],
+    ['big', Math.round(s.passed/s.total*100)+'%', 'Pass rate'],
+  ].map(([c,v,l])=>`<div class="stat"><div class="${c}">${v}</div><div class="lbl">${l}</div></div>`).join('');
+
+  // compare banner
+  const o=DATA.summary_old, n=DATA.summary_new;
+  document.getElementById('cmp-banner').innerHTML = `
+    <div class="cmp-side">
+      <span class="jm">${short(DATA.judge_old.model)} (before)</span>
+      <span class="jv c-red">${o.passed}/${DATA.summary.total} pass</span>
+      <span class="ja">avg ${o.avg.toFixed(3)} · ${o.failed} failed</span>
+    </div>
+    <div class="cmp-arrow">→<span class="d">${DATA.verdict_flips} flips</span></div>
+    <div class="cmp-side">
+      <span class="jm">${short(DATA.judge_new.model)} (after)</span>
+      <span class="jv c-green">${n.passed}/${DATA.summary.total} pass</span>
+      <span class="ja">avg ${n.avg.toFixed(3)} · ${n.failed} failed</span>
+    </div>`;
+
+  // compare table
+  document.getElementById('cmp-rows').innerHTML = DATA.results.map(r=>{
+    const flip = r.old_success!==r.success;
+    const d = (r.delta||0);
+    const dCls = d>0?'up':(d<0?'down':'flat');
+    const dTxt = (d>0?'+':'')+d.toFixed(2).replace(/\.00$/,'.00');
+    return `<tr class="${flip?'flip':''}">
+      <td class="scorecell">${r.idx}</td>
+      <td class="q">${r.input}</td>
+      <td class="scorecell">${(r.old_score??0).toFixed(2)} <span class="v ${clsOld(r)}">${r.old_success?'PASS':'FAIL'}</span></td>
+      <td class="scorecell">${(r.score??0).toFixed(2)} <span class="v ${cls(r)}">${r.success?'PASS':'FAIL'}</span></td>
+      <td class="delta ${dCls}">${dTxt}</td>
+    </tr>`;
+  }).join('');
+
+  // detail cards
+  document.getElementById('detail').innerHTML = DATA.results.map(r=>`
+    <div class="rc">
+      <div class="rc-head">
+        <span class="rc-idx">#${r.idx}</span>
+        <span class="rc-q">${r.input}</span>
+        <span class="v ${cls(r)}">${short(DATA.judge.model)}: ${(r.score??0).toFixed(2)} ${r.success?'PASS':'FAIL'}</span>
+      </div>
+      <div class="io">
+        <span class="k">Golden</span><span class="val">${r.expected||'—'}</span>
+        <span class="k">Bot reply</span><span class="val bot">${r.actual||'—'}</span>
+      </div>
+      <div class="judges">
+        <div class="jp">
+          <div class="jp-top"><span class="jp-name">${short(DATA.judge_old.model)}</span>
+            <span class="v ${clsOld(r)}">${r.old_success?'PASS':'FAIL'}</span></div>
+          <div class="gauge"><div class="gauge-fill" style="width:${pct(r.old_score)}%;background:${fillColor(r.old_score,r.old_success)}"></div><div class="gauge-thr"></div></div>
+          <span class="jp-score" style="color:${fillColor(r.old_score,r.old_success)}">${(r.old_score??0).toFixed(2)}</span>
+          <p class="jp-reason">${r.old_reason||''}</p>
+        </div>
+        <div class="jp">
+          <div class="jp-top"><span class="jp-name new">${short(DATA.judge.model)}</span>
+            <span class="v ${cls(r)}">${r.success?'PASS':'FAIL'}</span></div>
+          <div class="gauge"><div class="gauge-fill" style="width:${pct(r.score)}%;background:${fillColor(r.score,r.success)}"></div><div class="gauge-thr"></div></div>
+          <span class="jp-score" style="color:${fillColor(r.score,r.success)}">${(r.score??0).toFixed(2)}</span>
+          <p class="jp-reason">${r.reason||''}</p>
+        </div>
+      </div>
+    </div>`).join('');
+</script>
+</body>
+</html>

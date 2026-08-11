@@ -18,10 +18,18 @@ with Groq-hosted models doing the QA work:
 The first three use `gpt-oss-120b`. The QA Pipeline and Production QA
 Pipeline use `llama-3.3-70b-versatile` — see [Model choice](#model-choice).
 
-There's also `DeepEval/Excercises/`, a separate set of
-[DeepEval](https://github.com/confident-ai/deepeval) pytest exercises for
-LLM-output evaluation (answer relevancy, hallucination) — unrelated to the
-CrewAI pipelines above. See [DeepEval exercises](#deepeval-exercises).
+There's also `DeepEval/`, unrelated to the CrewAI pipelines above:
+
+- `DeepEval/Excercises/` – a small set of standalone
+  [DeepEval](https://github.com/confident-ai/deepeval) pytest exercises for
+  LLM-output evaluation (answer relevancy, hallucination). See
+  [DeepEval exercises](#deepeval-exercises).
+- `DeepEval/01_Chatbot/`, `DeepEval/02_RAG_Explorer/`, `DeepEval/03_DeepFramework/`
+  – a three-subsystem evaluation harness: two local "apps under test" (a
+  React/FastAPI/Groq support chatbot, and an Ollama-embed + ChromaDB + Groq
+  RAG pipeline) scored by a switchable-judge DeepEval suite with its own
+  pytest run and interactive dashboard. See
+  [DeepEval evaluation framework](#deepeval-evaluation-framework).
 
 ## Project structure
 
@@ -33,9 +41,12 @@ AITesting/
 ├── pyproject.toml                          # Dependencies
 ├── uv.lock                                 # Pinned versions (committed)
 ├── DeepEval/
-│   └── Excercises/
-│       ├── test_01_Basic_Anwser_Relevancy.py         # AnswerRelevancy + Hallucination basics
-│       └── test_02_Groq_Llama4_vs_Openrouter_Judge.py # Groq-answered, OpenRouter-judged test case
+│   ├── Excercises/
+│   │   ├── test_01_Basic_Anwser_Relevancy.py         # AnswerRelevancy + Hallucination basics
+│   │   └── test_02_Groq_Llama4_vs_Openrouter_Judge.py # Groq-answered, OpenRouter-judged test case
+│   ├── 01_Chatbot/         # Subsystem A — React + FastAPI + Groq support chatbot (app under test)
+│   ├── 02_RAG_Explorer/    # Subsystem B — Ollama-embed + ChromaDB + Groq RAG pipeline (app under test)
+│   └── 03_DeepFramework/   # Subsystem C — DeepEval suite (pytest + dashboard) scoring A and B
 └── crewAI/
     ├── MCP_Creation/
     │   ├── 01_Test_Analyst_Agent.py        # Single-agent: generates test cases
@@ -249,6 +260,59 @@ happen to be set at process start.
 
 `deepeval` is capped below 4.x in `pyproject.toml` — see
 [Dependency notes](#dependency-notes).
+
+## DeepEval evaluation framework
+
+Three standalone subsystems under `DeepEval/`, each with its own
+dependencies (not part of the root `uv sync`) and independent of both the
+CrewAI pipelines and the pytest exercises above:
+
+| # | Subsystem | What it is | Port |
+|---|-----------|------------|------|
+| A | `01_Chatbot/shopeasy_chatbot/01_chatbot/` | React (Vite) + FastAPI + Groq support chatbot — app under test | 8201 (backend), 5173 (frontend) |
+| B | `02_RAG_Explorer/02_rag_explorer/` | Ollama-embed (`nomic-embed-text`) + ChromaDB + Groq RAG pipeline — app under test, exposes every retrieval stage (chunks, embeddings, scored hits) | 8202 |
+| C | `03_DeepFramework/` | DeepEval judge suite scoring A, B, and a third live bot, via `pytest`/`deepeval test run` and an interactive dashboard | 8203 (dashboard) |
+
+Bring each one up in its own terminal:
+
+```bash
+# Subsystem A — backend, then frontend
+cd DeepEval/01_Chatbot/shopeasy_chatbot/01_chatbot/backend
+pip install -r requirements.txt && export GROQ_API_KEY=gsk_...
+uvicorn app:app --reload --port 8201
+cd ../frontend && npm install && npm run dev
+
+# Subsystem B
+cd DeepEval/02_RAG_Explorer/02_rag_explorer
+pip install -r requirements.txt
+ollama pull nomic-embed-text   # embeddings model
+export GROQ_API_KEY=gsk_...    # live answers; omit for mock mode
+uvicorn app:app --reload --port 8202
+
+# Subsystem C — judge suite + dashboard
+cd DeepEval/03_DeepFramework
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+export JUDGE_PROVIDER=openai JUDGE_MODEL_OPENAI=gpt-5-mini
+pytest tests/chatbot/test_01_chatbot_answer_relevancy.py -v
+uvicorn dashboard.app:app --port 8203
+```
+
+A and B read their Groq key straight from the process environment (`export`
+before running); C loads its own `DeepEval/03_DeepFramework/.env` instead of
+the repo-root one — the root `.gitignore`'s bare `.env` line covers it too.
+All three use `GROQ_API_KEY`, distinct from the CrewAI pipelines'
+`GROQ_KEY` above.
+
+Subsystem C runs 29 registered metrics (answer relevancy, faithfulness,
+hallucination, correctness, bias, toxicity, PII leakage, and more) against
+goldens for each app under test, with the judge LLM switchable via
+`JUDGE_PROVIDER` (`openai` / `groq` / `ollama` / `openrouter`) and always
+kept separate from the app it's judging. The dashboard adds golden-set
+editing and a local run history (dashboard *and* `pytest` runs both land in
+it) on top of what `pytest`/`deepeval test run` give you for CI. See
+`DeepEval/03_DeepFramework/README.md` for the full file map and scoring
+conventions, and the per-subsystem READMEs for API/page details.
 
 ## How it works
 

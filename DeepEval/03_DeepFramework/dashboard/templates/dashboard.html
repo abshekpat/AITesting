@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>DeepEval Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css" />
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- ===================== SIDEBAR ===================== -->
+  <aside class="side">
+    <div class="side-top">
+      <button class="collapse" id="collapse" title="Collapse sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+      </button>
+      <div class="brand"><span class="logo">D</span><span class="bt">Deep<span class="g">Eval</span></span></div>
+    </div>
+
+    <div class="search">
+      <svg class="si" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="text" placeholder="Search metrics…" />
+      <kbd>⌘K</kbd>
+    </div>
+
+    <div class="nav-sec lbl">Workspace</div>
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-panel="overview">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+        <span class="lbl">Overview</span>
+      </button>
+      <button class="nav-item" data-panel="datasets">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+        <span class="lbl">Golden Datasets</span>
+      </button>
+      <button class="nav-item" data-panel="run">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+        <span class="lbl">Run Metrics</span>
+      </button>
+      <button class="nav-item" data-panel="logs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9 9 0 0 0-6.3 2.6L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>
+        <span class="lbl">Runs &amp; Logs</span>
+      </button>
+    </nav>
+
+    <div class="side-foot">
+      <div class="jrow"><span class="dot" id="foot-dot"></span> <span>Judge LLM</span></div>
+      <div class="jm" id="foot-judge">—</div>
+    </div>
+  </aside>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <h2 id="panel-title">Golden Datasets</h2>
+        <div class="sub" id="panel-sub">View, edit and save the chatbot &amp; RAG goldens</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="ctrl">
+        <label>Target
+          <select id="target">
+            <option value="chatbot">Chatbot (A)</option>
+            <option value="rag">RAG Explorer (B)</option>
+            <option value="browserbash">BrowserBash (live)</option>
+            <option value="all" class="run-only">All</option>
+            <option value="synthetic" class="run-only">Synthetic</option>
+          </select>
+        </label>
+        <label class="run-only">Judge
+          <select id="provider">
+            <option value="openai">OpenAI</option>
+            <option value="groq">Groq</option>
+            <option value="ollama">Ollama</option>
+          </select>
+        </label>
+        <label class="run-only">Model
+          <input id="judge-model" type="text" placeholder="auto" />
+        </label>
+        <button class="btn ghost sm run-only" id="apply-judge">Apply</button>
+        <button class="btn sm run-only" id="run-all">▶ Run all</button>
+      </div>
+    </header>
+
+    <!-- ---------- PANEL: OVERVIEW ---------- -->
+    <section class="panel active" id="panel-overview">
+      <div class="ov-hero" id="ov-hero"></div>
+      <div class="ov-sec-title">Subsystems under test <span class="muted">— chatbot, RAG &amp; BrowserBash</span></div>
+      <div class="ov-grid2" id="ov-targets"></div>
+      <div class="ov-sec-title">Metric coverage <span class="muted" id="ov-cov-sub"></span></div>
+      <div class="cov" id="ov-coverage"></div>
+      <div class="ov-sec-title">Recent runs <span class="muted">— click to open in Runs &amp; Logs</span></div>
+      <div class="ov-runs" id="ov-recent"></div>
+    </section>
+
+    <!-- ---------- PANEL: GOLDEN DATASETS ---------- -->
+    <section class="panel" id="panel-datasets">
+      <div class="panel-head">
+        <h3 id="g-title">Chatbot goldens</h3>
+        <span class="tag" id="g-count">—</span>
+        <span class="tag" id="g-state">seed</span>
+        <div class="spacer"></div>
+        <button class="btn ghost sm" id="g-add">+ Add row</button>
+        <button class="btn ghost sm" id="g-reset">Reset to seed</button>
+        <button class="btn sm" id="g-save">Save dataset</button>
+      </div>
+      <p class="ghint">Edit any cell. List columns (context, categories, sources, keywords) take multiple values separated by <code>|</code>. <strong>Save</strong> writes a local override the dashboard runner evaluates against — the original <code>.py</code> dataset stays as the seed.</p>
+      <div id="g-table-wrap"></div>
+    </section>
+
+    <!-- ---------- PANEL: RUN METRICS ---------- -->
+    <section class="panel" id="panel-run">
+      <div class="statline">
+        <div class="scard"><span class="dot" id="dot-chatbot"></span><div><strong>Chatbot</strong> <small id="url-chatbot">—</small></div></div>
+        <div class="scard"><span class="dot" id="dot-rag"></span><div><strong>RAG</strong> <small id="url-rag">—</small></div></div>
+        <div class="counts">
+          <span class="count pass" id="count-pass">0</span>
+          <span class="count fail" id="count-fail">0</span>
+          <span class="count pending" id="count-pending">0</span>
+        </div>
+      </div>
+      <div class="filters">
+        <span class="tag">Categories</span>
+        <button class="chip active" data-cat="all">All</button>
+        <button class="chip" data-cat="quality">Quality</button>
+        <button class="chip" data-cat="retrieval">Retrieval</button>
+        <button class="chip" data-cat="safety">Safety</button>
+        <button class="chip" data-cat="geval">G-Eval</button>
+        <button class="chip" data-cat="conversational">Conversational</button>
+      </div>
+      <div id="grid" class="grid"></div>
+    </section>
+
+    <!-- ---------- PANEL: RUNS & LOGS ---------- -->
+    <section class="panel" id="panel-logs">
+      <div class="panel-head">
+        <h3>Local run history</h3>
+        <span class="muted">Every run captured here before any Confident AI push — input, output &amp; the judge's verdict.</span>
+        <div class="spacer"></div>
+        <button class="btn ghost sm" id="logs-refresh">↻ Refresh</button>
+        <button class="btn ghost sm danger" id="logs-clear">Clear history</button>
+      </div>
+      <div id="sessions" class="sessions"></div>
+    </section>
+  </main>
+</div>
+
+<dialog id="detail">
+  <article id="detail-body"></article>
+  <form method="dialog"><button class="btn ghost">Close</button></form>
+</dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const esc = (x) => (x ?? "").toString().replace(/</g, "&lt;");
+
+let allMetrics = [];
+let activeCategory = "all";
+let activePanel = "datasets";
+let counts = { pass: 0, fail: 0, pending: 0 };
+
+const PANEL_META = {
+  overview: ["Overview", "Analytics across the chatbot, RAG & BrowserBash subsystems"],
+  datasets: ["Golden Datasets", "View, edit and save the chatbot & RAG goldens"],
+  run: ["Run Metrics", "Run any metric individually or all at once"],
+  logs: ["Runs & Logs", "Every local run, captured before Confident AI"],
+};
+
+/* ---------- collapse + nav ---------- */
+$("#collapse").addEventListener("click", () => $("#app").classList.toggle("collapsed"));
+
+function switchPanel(name) {
+  activePanel = name;
+  $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.panel === name));
+  $$(".panel").forEach((p) => p.classList.toggle("active", p.id === `panel-${name}`));
+  $("#panel-title").textContent = PANEL_META[name][0];
+  $("#panel-sub").textContent = PANEL_META[name][1];
+  $$(".run-only").forEach((el) => { el.style.display = (name === "run") ? "" : "none"; });
+  if (name === "overview") loadOverview();
+  if (name === "datasets") loadGoldens();
+  if (name === "logs") loadRuns();
+}
+$("#nav").addEventListener("click", (e) => {
+  const b = e.target.closest(".nav-item"); if (b) switchPanel(b.dataset.panel);
+});
+
+/* ---------- info / judge ---------- */
+async function loadInfo() {
+  const d = await (await fetch("/api/info")).json();
+  $("#dot-chatbot").className = "dot " + (d.targets.chatbot.alive ? "" : "warn");
+  $("#dot-rag").className = "dot " + (d.targets.rag.alive ? "" : "warn");
+  $("#url-chatbot").textContent = d.targets.chatbot.url + (d.targets.chatbot.alive ? "" : " · DOWN");
+  $("#url-rag").textContent = d.targets.rag.url + (d.targets.rag.alive ? "" : " · DOWN");
+  $("#foot-judge").textContent = d.judge.provider + " · " + d.judge.model;
+  $("#foot-dot").className = "dot";
+  if ($("#provider")) $("#provider").value = d.current_provider;
+}
+async function applyJudge() {
+  const provider = $("#provider").value;
+  const model = $("#judge-model").value.trim();
+  const d = await (await fetch("/api/judge", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ provider, model: model || null }),
+  })).json();
+  $("#foot-judge").textContent = d.provider + " · " + d.model;
+}
+$("#apply-judge").addEventListener("click", applyJudge);
+
+/* ================= RUN METRICS ================= */
+function metricCard(m) {
+  const card = document.createElement("article");
+  card.className = `card cat-${m.category}`;
+  card.dataset.id = m.id; card.dataset.category = m.category; card.dataset.target = m.target;
+  card.dataset.name = m.name.toLowerCase();
+  card.innerHTML = `
+    <div class="meta">
+      <span class="cat ${m.category}">${m.category}</span>
+      <span class="target">${m.target}</span>
+      <span class="threshold mono">${m.display_threshold}</span>
+    </div>
+    <h3>${m.name}</h3>
+    <p class="desc">${m.description}</p>
+    <div class="result" data-empty="true">
+      <div class="state pending"><span class="badge">Pending</span></div>
+      <small class="hint">Click Run to evaluate</small>
+    </div>
+    <footer>
+      <button class="btn run" data-id="${m.id}">▶ Run</button>
+      <button class="btn ghost details" disabled>Details</button>
+    </footer>`;
+  return card;
+}
+function refreshCounts() {
+  $("#count-pass").textContent = counts.pass;
+  $("#count-fail").textContent = counts.fail;
+  $("#count-pending").textContent = counts.pending;
+}
+function classify(r) {
+  if (!r) return { cls: "pending", label: "Pending" };
+  if (!r.ok) return { cls: "error", label: "Error" };
+  return r.passed ? { cls: "pass", label: "Pass" } : { cls: "fail", label: "Fail" };
+}
+function renderResult(card, r) {
+  const out = card.querySelector(".result");
+  const c = classify(r);
+  const score = (r && typeof r.score === "number") ? r.score.toFixed(3) : "—";
+  out.innerHTML = `
+    <div class="state ${c.cls}"><span class="badge">${c.label}</span><span class="score mono">${score}</span></div>
+    <div class="bar"><div class="bar-fill ${c.cls}" style="width:${Math.min(1, Math.max(0, r?.score ?? 0)) * 100}%"></div></div>
+    <p class="reason">${esc((r && r.reason) || (r?.error || ""))}</p>
+    <small class="hint">${r && r.elapsed_ms ? r.elapsed_ms + " ms" : ""} · ${r && r.judge ? esc(r.judge) : ""}</small>`;
+  out.removeAttribute("data-empty");
+  card.querySelector(".details").disabled = !r || !r.ok;
+  card.dataset.lastResult = JSON.stringify(r || {});
+}
+async function runMetric(id) {
+  const card = $(`#grid [data-id="${CSS.escape(id)}"]`); if (!card) return;
+  card.classList.add("running");
+  card.querySelector(".result").innerHTML =
+    `<div class="state running"><span class="badge">Running…</span></div><div class="bar"><div class="bar-fill running" style="width:35%"></div></div><small class="hint">Waiting for judge…</small>`;
+  try {
+    const r = await (await fetch("/api/run", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ metric_id: id }),
+    })).json();
+    if (r.passed === true) counts.pass++; else counts.fail++;
+    counts.pending = Math.max(0, counts.pending - 1);
+    refreshCounts(); renderResult(card, r);
+  } catch (e) { renderResult(card, { ok: false, error: e.message }); }
+  finally { card.classList.remove("running"); }
+}
+function applyFilter() {
+  const q = ($("#search").value || "").toLowerCase();
+  const tgt = $("#target").value;
+  for (const card of $("#grid").children) {
+    const inCat = activeCategory === "all" || card.dataset.category === activeCategory;
+    const inTar = tgt === "all" || card.dataset.target === tgt;
+    const inQ = !q || card.dataset.name.includes(q);
+    card.style.display = (inCat && inTar && inQ) ? "" : "none";
+  }
+}
+async function loadMetrics() {
+  const d = await (await fetch("/api/metrics")).json();
+  allMetrics = d.metrics;
+  const grid = $("#grid"); grid.innerHTML = "";
+  counts = { pass: 0, fail: 0, pending: allMetrics.length }; refreshCounts();
+  for (const m of allMetrics) grid.appendChild(metricCard(m));
+  applyFilter();
+}
+$("#grid").addEventListener("click", (e) => {
+  const runBtn = e.target.closest(".run");
+  if (runBtn) return runMetric(runBtn.dataset.id);
+  const detBtn = e.target.closest(".details");
+  if (detBtn) {
+    const r = JSON.parse(detBtn.closest(".card").dataset.lastResult || "{}");
+    $("#detail-body").innerHTML = `
+      <h2>${esc(r.metric_id)}</h2>
+      <table class="kv">
+        <tr><th>Score</th><td class="mono">${r.score ?? "—"}</td></tr>
+        <tr><th>Threshold</th><td class="mono">${r.higher_is_better ? "≥" : "≤"} ${r.threshold}</td></tr>
+        <tr><th>Passed</th><td class="mono">${r.passed}</td></tr>
+        <tr><th>Judge</th><td class="mono">${esc(r.judge)}</td></tr>
+        <tr><th>Elapsed</th><td class="mono">${r.elapsed_ms} ms</td></tr>
+      </table>
+      <h4>Input</h4><pre>${esc(r.input)}</pre>
+      <h4>Actual output</h4><pre>${esc(r.actual_output)}</pre>
+      <h4>Judge reasoning</h4><pre>${esc(r.reason)}</pre>
+      <h4>Extra</h4><pre>${esc(JSON.stringify(r.extra || {}, null, 2))}</pre>`;
+    $("#detail").showModal();
+  }
+});
+$$(".chip").forEach((c) => c.addEventListener("click", () => {
+  $$(".chip").forEach((x) => x.classList.remove("active"));
+  c.classList.add("active"); activeCategory = c.dataset.cat; applyFilter();
+}));
+$("#search").addEventListener("input", applyFilter);
+$("#target").addEventListener("change", () => {
+  if (activePanel === "run") applyFilter();
+  if (activePanel === "datasets") loadGoldens();
+  if (activePanel === "logs") loadRuns();
+});
+$("#run-all").addEventListener("click", async () => {
+  const vis = [...$("#grid").children].filter((c) => c.style.display !== "none");
+  for (const c of vis) await runMetric(c.dataset.id);
+  if (activePanel === "logs") loadRuns();
+});
+
+/* ================= GOLDEN DATASETS ================= */
+let gFields = [];
+const TARGET_LABEL = { chatbot: "Chatbot", rag: "RAG", browserbash: "BrowserBash" };
+function goldenTarget() {
+  const t = $("#target").value;
+  return TARGET_LABEL[t] ? t : "chatbot";
+}
+async function loadGoldens() {
+  const target = goldenTarget();
+  const d = await (await fetch(`/api/goldens?target=${target}`)).json();
+  gFields = d.fields;
+  $("#g-title").textContent = (TARGET_LABEL[target] || "Chatbot") + " goldens";
+  $("#g-count").textContent = d.items.length + " rows";
+  $("#g-state").textContent = d.overridden ? "saved override" : "seed";
+  $("#g-state").className = "tag " + (d.overridden ? "ac" : "");
+  renderGoldenTable(d.items);
+}
+function renderGoldenTable(items) {
+  const listCols = new Set(["context", "categories", "expected_context_keywords", "expected_sources"]);
+  const head = `<tr><th class="rownum">#</th>${gFields.map((f) => `<th>${f.replace(/_/g, " ")}</th>`).join("")}<th></th></tr>`;
+  const rows = items.map((it, i) => {
+    const cells = gFields.map((f) => {
+      let v = it[f];
+      if (listCols.has(f)) v = Array.isArray(v) ? v.join(" | ") : (v || "");
+      return `<td><textarea data-f="${f}">${esc(v)}</textarea></td>`;
+    }).join("");
+    return `<tr><td class="rownum">${i + 1}</td>${cells}<td><button class="del" title="Delete row">×</button></td></tr>`;
+  }).join("");
+  $("#g-table-wrap").innerHTML = `<table class="gtable"><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+}
+function collectGoldens() {
+  return [...$("#g-table-wrap tbody tr")].map((tr) => {
+    const row = {};
+    tr.querySelectorAll("textarea").forEach((ta) => { row[ta.dataset.f] = ta.value; });
+    return row;
+  }).filter((r) => (r.input || "").trim());
+}
+$("#g-add").addEventListener("click", () => {
+  const blank = {}; gFields.forEach((f) => blank[f] = "");
+  const items = collectGoldens(); items.push(blank); renderGoldenTable(items);
+});
+$("#g-save").addEventListener("click", async () => {
+  const target = goldenTarget();
+  const items = collectGoldens();
+  const d = await (await fetch("/api/goldens", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target, items }),
+  })).json();
+  $("#g-state").textContent = "saved override"; $("#g-state").className = "tag ac";
+  $("#g-count").textContent = d.saved + " rows";
+  $("#g-save").textContent = "Saved ✓";
+  setTimeout(() => ($("#g-save").textContent = "Save dataset"), 1400);
+});
+$("#g-reset").addEventListener("click", async () => {
+  const target = goldenTarget();
+  await fetch("/api/goldens/reset", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ target }),
+  });
+  loadGoldens();
+});
+$("#g-table-wrap").addEventListener("click", (e) => {
+  if (e.target.classList.contains("del")) {
+    const items = collectGoldens();
+    const idx = [...$("#g-table-wrap tbody tr")].indexOf(e.target.closest("tr"));
+    items.splice(idx, 1); renderGoldenTable(items);
+  }
+});
+
+/* ================= RUNS & LOGS ================= */
+function dotClass(m) {
+  if (m.failed === 0) return "good";
+  if (m.passed === 0) return "bad";
+  return "mix";
+}
+async function loadRuns() {
+  const t = $("#target").value;
+  const tq = (t === "chatbot" || t === "rag" || t === "browserbash") ? `?target=${t}` : "";
+  const d = await (await fetch(`/api/runs${tq}`)).json();
+  const wrap = $("#sessions");
+  if (!d.sessions.length) {
+    wrap.innerHTML = `<div class="empty">No runs captured yet. Run a metric (Run Metrics tab) or a <code>deepeval test run</code> — results land here automatically.</div>`;
+    return;
+  }
+  wrap.innerHTML = d.sessions.map((s, si) => {
+    const metricPills = s.metrics.map((m, mi) => `
+      <div class="mpill" data-s="${si}" data-m="${mi}">
+        <span class="dotm ${dotClass(m)}"></span>
+        <span class="nm">${esc(m.metric)}</span>
+        <span class="sc"><span class="${m.failed === 0 ? "ok" : "bad"}">${m.passed}/${m.total}</span>${m.avg != null ? " · " + m.avg : ""}</span>
+      </div>`).join("");
+    const caseBoxes = s.metrics.map((m, mi) => `
+      <div class="cases" data-s="${si}" data-m="${mi}">
+        ${m.cases.map((c) => `
+          <div class="casebox">
+            <div class="ch">
+              <span class="v ${c.passed ? "pass" : "fail"}">${c.passed ? "PASS" : "FAIL"}</span>
+              <span class="sc">${c.score != null ? Number(c.score).toFixed(2) : "—"}</span>
+              <span class="q">${esc(c.input)}</span>
+            </div>
+            ${c.actual_output ? `<div class="kvrow"><span class="k">Output</span><span class="vv">${esc(c.actual_output)}</span></div>` : ""}
+            <div class="kvrow"><span class="k">Judge</span><span class="vv">${esc(c.reason)}</span></div>
+          </div>`).join("")}
+      </div>`).join("");
+    return `<div class="session">
+      <div class="session-head" data-s="${si}">
+        <span class="when">${esc((s.ts || "").replace("T", "  "))}</span>
+        <span class="src ${s.source}">${esc(s.source)}</span>
+        <span class="meta2">${esc(s.judge || "")} · ${esc(s.target || "")}</span>
+        <span class="tally"><span class="p">${s.passed}</span>/<span>${s.total}</span> pass · <span class="f">${s.failed}</span> fail</span>
+      </div>
+      <div class="metricrow">${metricPills}</div>
+      ${caseBoxes}
+    </div>`;
+  }).join("");
+}
+$("#sessions").addEventListener("click", (e) => {
+  const pill = e.target.closest(".mpill");
+  if (pill) {
+    const box = $(`#sessions .cases[data-s="${pill.dataset.s}"][data-m="${pill.dataset.m}"]`);
+    if (box) box.classList.toggle("open");
+  }
+});
+$("#logs-refresh").addEventListener("click", loadRuns);
+$("#logs-clear").addEventListener("click", async () => {
+  await fetch("/api/runs", { method: "DELETE" });
+  loadRuns();
+});
+
+/* ================= OVERVIEW ================= */
+async function loadOverview() {
+  const d = await (await fetch("/api/overview")).json();
+  const r = d.runs;
+  const mt = d.metrics.by_target;
+  $("#ov-hero").innerHTML = [
+    ["", d.metrics.total, "Metrics", `${mt.chatbot || 0} cb · ${mt.rag || 0} rag · ${mt.browserbash || 0} bb`],
+    ["b", d.total_tests, "Test files", `${d.test_files.chatbot} cb · ${d.test_files.rag} rag · ${d.test_files.browserbash} bb`],
+    ["v", d.total_goldens, "Goldens", `${d.goldens.chatbot} cb · ${d.goldens.rag} rag · ${d.goldens.browserbash} bb`],
+    ["a", r.sessions, "Runs captured", `${r.cases} cases · ${r.pass_rate}% pass`],
+  ].map(([cls, big, lbl, sub]) => `<div class="ov-stat ${cls}"><div class="big">${big}</div><div class="lbl">${lbl}</div><div class="sub2">${sub}</div></div>`).join("");
+
+  const TCLS = { chatbot: 'cb', rag: 'rg', browserbash: 'bb' };
+  const tcard = (key, t) => {
+    const rt = t.runs; const pr = rt.cases ? Math.round(rt.passed / rt.cases * 100) : 0;
+    return `<div class="tcard ${TCLS[key] || ''}">
+      <div class="th"><span class="badge2">${t.subsystem}</span>
+        <div><div class="name">${esc(t.label)}</div><div class="url"><span class="dot ${t.alive ? '' : 'warn'}"></span>${esc(t.url)}${t.alive ? '' : ' · DOWN'}</div></div></div>
+      <div class="stats3">
+        <div class="s3"><div class="n">${t.metrics}</div><div class="l">metrics</div></div>
+        <div class="s3"><div class="n">${t.goldens}</div><div class="l">goldens</div></div>
+        <div class="s3"><div class="n">${t.tests}</div><div class="l">tests</div></div>
+        <div class="s3"><div class="n">${rt.sessions}</div><div class="l">runs</div></div>
+      </div>
+      <div class="pass-rate">${rt.cases ? `${rt.passed}/${rt.cases} cases passed · ${pr}%` : 'no runs captured yet'}</div>
+      <div class="pr-bar"><div class="pr-fill" style="width:${pr}%"></div></div>
+    </div>`;
+  };
+  $("#ov-targets").innerHTML = Object.entries(d.targets).map(([k, t]) => tcard(k, t)).join("");
+
+  $("#ov-cov-sub").textContent = `— ${d.metrics.total} metrics across ${Object.keys(d.metrics.by_category).length} categories`;
+  $("#ov-coverage").innerHTML = Object.entries(d.metrics.by_category)
+    .map(([c, n]) => `<span class="covchip">${c} <b>${n}</b></span>`).join("");
+
+  const recent = r.recent || [];
+  $("#ov-recent").innerHTML = recent.length ? recent.map((s) => `
+    <div class="ov-run">
+      <span class="when">${esc((s.ts || '').replace('T', '  '))}</span>
+      <span class="src">${esc(s.source)}</span>
+      <span class="meta3">${esc(s.target)} · ${esc(s.judge || '')} · ${s.metrics.length} metrics</span>
+      <span class="tally2"><span class="p">${s.passed}</span>/${s.total} pass · <span class="f">${s.failed}</span> fail</span>
+    </div>`).join("")
+    : `<div class="empty">No runs captured yet. Run a metric (Run Metrics) or a <code>deepeval test run</code> — results land here automatically.</div>`;
+}
+$("#ov-recent").addEventListener("click", (e) => { if (e.target.closest(".ov-run")) switchPanel("logs"); });
+
+/* ---------- boot ---------- */
+document.addEventListener("keydown", (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") { e.preventDefault(); switchPanel("run"); $("#search").focus(); }
+});
+(async () => {
+  await loadInfo();
+  await loadMetrics();
+  switchPanel("overview");
+})();
+</script>
+</body>
+</html>

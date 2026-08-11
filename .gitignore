@@ -10,6 +10,9 @@ venv/
 # IDE
 .idea/
 
+# Node
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -20,3 +23,7 @@ __pycache__/
 # Generated pipeline artifacts
 crewAI/CrewAI_QA_Pipeline/output/
 crewAI/CrewAI_production_QA_Pipeline/output/
+
+# Local ChromaDB vector store (seeded at runtime)
+DeepEval/02_RAG_Explorer/02_rag_explorer/chroma_db/
+DeepEval/02_RAG_Explorer/02_rag_explorer/data/uploads/
