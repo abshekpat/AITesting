@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Chapter 19 · DeepEval Framework — How It Works</title>
+<meta name="description" content="An LLM-as-judge harness that scores a live chatbot and a RAG pipeline with DeepEval — one metric registry, two surfaces." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&family=Kalam:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    --mono:'JetBrains Mono','Fira Code',ui-monospace,Menlo,monospace;
+    --hand:'Kalam',cursive;
+    --nav-h:57px; --r:8px; --rs:5px; --t:.14s ease;
+    /* TTA light */
+    --bg:#ffffff; --bg1:#f9fafb; --bg2:#f3f4f6;
+    --bd:#e5e7eb; --bd2:#d1d5db;
+    --tx:#111827; --tx2:#374151; --tx3:#6b7280; --tx4:#9ca3af;
+    --ac:#16a34a; --ach:#15803d; --ac-bg:#f0fdf4; --ac-bd:#bbf7d0; --ac-tx:#166534;
+    --nav-bg:rgba(255,255,255,.85);
+    --code-bg:#18181b; --code-bd:#27272a;
+    --shadow:0 1px 2px rgba(17,24,39,.04),0 8px 24px rgba(17,24,39,.06);
+    /* category accents (shared with the diagrams) */
+    --blue:#2563eb; --amber:#d97706; --violet:#7c3aed; --teal:#0d9488; --red:#dc2626; --pink:#a21caf;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--font);line-height:1.65;-webkit-font-smoothing:antialiased;transition:background var(--t),color var(--t)}
+  a{color:var(--ac);text-decoration:none}
+  a:hover{color:var(--ach)}
+  code,kbd{font-family:var(--mono)}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 24px}
+  section{padding:60px 0;border-top:1px solid var(--bd)}
+  h2{font-size:1.6rem;margin:0 0 6px;letter-spacing:-.02em;font-weight:700}
+  h2 .num{color:var(--tx4);font-family:var(--mono);font-size:.95rem;margin-right:10px}
+  .lead{color:var(--tx3);max-width:72ch;margin:0 0 26px;font-size:1rem}
+  .eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.22em;text-transform:uppercase;color:var(--ac);margin:0 0 12px;font-weight:500}
+
+  /* ---------- TOPBAR ---------- */
+  .topbar{position:sticky;top:0;z-index:50;height:var(--nav-h);display:flex;align-items:center;
+    background:var(--nav-bg);backdrop-filter:saturate(180%) blur(12px);border-bottom:1px solid var(--bd)}
+  .topbar .wrap{display:flex;align-items:center;justify-content:space-between;width:100%}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:.92rem;letter-spacing:-.01em}
+  .brand .mark{width:22px;height:22px;border-radius:6px;background:var(--ac);display:grid;place-items:center;color:#fff;font-weight:700;font-size:.8rem}
+  .brand .sep{color:var(--tx4);font-weight:400}
+  .brand .ch{color:var(--tx3);font-weight:500}
+  .tb-right{display:flex;align-items:center;gap:8px}
+  .tb-pill{font-family:var(--mono);font-size:.7rem;color:var(--tx3);border:1px solid var(--bd);border-radius:999px;padding:4px 10px;background:var(--bg1)}
+
+  /* ---------- HERO ---------- */
+  .hero{position:relative;overflow:hidden;padding:72px 0 56px;border-top:none;
+    background:radial-gradient(900px 360px at 50% -40%,var(--ac-bg),transparent 70%)}
+  .hero::after{content:"";position:absolute;inset:0;background-image:radial-gradient(var(--bd) 1px,transparent 1px);
+    background-size:22px 22px;opacity:.5;mask-image:radial-gradient(600px 320px at 50% 0,#000,transparent 75%);pointer-events:none}
+  .hero .wrap{position:relative;z-index:1}
+  .badge{display:inline-flex;gap:8px;align-items:center;font-family:var(--mono);font-size:.72rem;
+    border:1px solid var(--ac-bd);background:var(--ac-bg);padding:5px 11px;border-radius:999px;color:var(--ac-tx)}
+  .badge .dot{width:7px;height:7px;border-radius:50%;background:var(--ac);box-shadow:0 0 0 0 rgba(22,163,74,.5);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(22,163,74,.45)}70%{box-shadow:0 0 0 9px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+  .hero h1{font-size:clamp(2rem,5vw,3.1rem);line-height:1.06;margin:18px 0 14px;letter-spacing:-.03em;font-weight:700}
+  .hero h1 .mk{position:relative;color:var(--ach);white-space:nowrap}
+  .hero h1 .mk::after{content:"";position:absolute;left:-2px;right:-2px;bottom:.08em;height:.34em;background:var(--ac);
+    opacity:.22;border-radius:3px;z-index:-1;transform:rotate(-.6deg)}
+  .hero p.sub{font-size:1.08rem;color:var(--tx3);max-width:64ch;margin:0}
+  .stat-row{display:flex;flex-wrap:wrap;gap:14px;margin-top:32px}
+  .stat{flex:1;min-width:130px;background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);padding:16px 18px;box-shadow:var(--shadow)}
+  .stat .big{font-size:1.9rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .stat .lbl{font-size:.74rem;color:var(--tx4);font-family:var(--mono);text-transform:uppercase;letter-spacing:.08em;margin-top:2px}
+  .c-green{color:var(--ac)} .c-amber{color:var(--amber)} .c-blue{color:var(--blue)} .c-violet{color:var(--violet)} .c-teal{color:var(--teal)} .c-red{color:var(--red)}
+
+  /* ---------- CARDS ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+  .card{background:var(--bg1);border:1px solid var(--bd);border-radius:var(--r);padding:18px;transition:var(--t)}
+  .card:hover{border-color:var(--bd2);transform:translateY(-2px);box-shadow:var(--shadow)}
+  .card h4{margin:0 0 6px;font-size:1rem}
+  .card .k{font-family:var(--mono);font-size:.7rem;color:var(--ac);text-transform:uppercase;letter-spacing:.08em}
+  .card p{margin:6px 0 0;color:var(--tx3);font-size:.88rem}
+
+  /* ---------- TABLES ---------- */
+  .tbl-wrap{border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;margin:10px 0}
+  table{width:100%;border-collapse:collapse;font-size:.9rem}
+  th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--bd);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  th{font-family:var(--mono);font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;color:var(--tx4);background:var(--bg1)}
+  td code{color:var(--violet);font-size:.82rem}
+  tbody tr:hover td{background:var(--bg1)}
+  .ok{color:var(--ac);font-weight:600} .warn{color:var(--amber);font-weight:600}
+
+  /* ---------- EVAL SIM (animation) ---------- */
+  .evalsim{margin:22px 0 6px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg1);padding:22px;box-shadow:var(--shadow)}
+  .esim-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+  .esim-metric{font-family:var(--mono);font-size:.9rem;color:var(--tx);font-weight:500}
+  .esim-dir{font-family:var(--mono);font-size:.72rem;color:var(--tx3);border:1px solid var(--bd);border-radius:999px;padding:3px 10px;background:var(--bg2)}
+  .esim-track{display:flex;align-items:stretch;gap:0;flex-wrap:wrap}
+  .esim-stage{flex:1;min-width:130px;position:relative;border:1px solid var(--bd);background:var(--bg);border-radius:var(--rs);
+    padding:13px 13px 14px;transition:.25s;opacity:.55}
+  .esim-stage .esk{font-family:var(--mono);font-size:.66rem;color:var(--tx4);letter-spacing:.1em}
+  .esim-stage b{display:block;font-size:.92rem;margin:3px 0 1px}
+  .esim-stage i{font-style:normal;font-size:.76rem;color:var(--tx3)}
+  .esim-stage.active{opacity:1;border-color:var(--ac);box-shadow:0 0 0 3px var(--ac-bg)}
+  .esim-stage.judging{border-color:var(--amber);box-shadow:0 0 0 3px rgba(217,119,6,.12);animation:think .7s ease-in-out infinite alternate}
+  @keyframes think{from{transform:translateY(0)}to{transform:translateY(-3px)}}
+  .esim-link{flex:0 0 26px;align-self:center;height:2px;background:var(--bd);position:relative}
+  .esim-link::after{content:"";position:absolute;right:-1px;top:-3px;border-left:6px solid var(--bd);border-top:4px solid transparent;border-bottom:4px solid transparent}
+  @media(max-width:760px){.esim-link{display:none}.esim-stage{min-width:46%}}
+  .esim-readout{margin-top:20px;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .gauge{position:relative;flex:1;min-width:240px;height:30px;background:var(--bg2);border:1px solid var(--bd);border-radius:999px;overflow:visible}
+  .gauge-fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:999px;background:var(--tx4);transition:width .7s cubic-bezier(.22,1,.36,1),background .3s}
+  .gauge-fill.pass{background:var(--ac)} .gauge-fill.fail{background:var(--red)}
+  .gauge-thr{position:absolute;top:-7px;bottom:-7px;width:2px;background:var(--tx2);left:70%;transition:left .3s}
+  .gauge-thr-lbl{position:absolute;top:-20px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--mono);font-size:.66rem;color:var(--tx2)}
+  .esim-meta{display:flex;align-items:center;gap:12px}
+  .gauge-score{font-family:var(--mono);font-size:1.45rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--tx);min-width:62px}
+  .esim-chip{font-family:var(--mono);font-size:.8rem;font-weight:700;padding:5px 12px;border-radius:999px;border:1px solid var(--bd);color:var(--tx3)}
+  .esim-chip.pass{background:var(--ac-bg);border-color:var(--ac-bd);color:var(--ac-tx)}
+  .esim-chip.fail{background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.3);color:var(--red)}
+  .esim-reason{margin-top:14px;font-size:.92rem;color:var(--tx2);min-height:1.4em;font-style:italic}
+  .esim-reason:empty::before{content:"\00a0"}
+
+  /* ---------- HAND-DRAWN BOARD ---------- */
+  .board{margin:20px 0 8px;border:1px solid var(--bd);border-radius:var(--r);background:var(--bg1);
+    background-image:radial-gradient(var(--bd) 1px,transparent 1px);background-size:20px 20px;padding:10px;box-shadow:var(--shadow)}
+  .board svg{display:block;width:100%;height:auto}
+  .board-cap{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 6px 0;
+    font-family:var(--mono);font-size:.72rem;color:var(--tx4)}
+  .board-cap .lg{display:flex;gap:14px;flex-wrap:wrap}
+  .board-cap .lg span{display:inline-flex;gap:6px;align-items:center}
+  .sw{width:11px;height:11px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+  .subh{font-size:1.14rem;font-weight:600;margin:40px 0 2px;letter-spacing:-.01em}
+  .subh .t{display:block;font-family:var(--mono);font-size:.66rem;letter-spacing:.16em;text-transform:uppercase;color:var(--ac);font-weight:500;margin-bottom:6px}
+  .subh-p{color:var(--tx3);font-size:.94rem;margin:6px 0 0;max-width:72ch}
+
+  /* ---------- CODE / TABS ---------- */
+  .tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:0}
+  .tabs button{font-family:var(--mono);font-size:.78rem;color:var(--tx3);background:var(--bg1);border:1px solid var(--bd);
+    border-bottom:none;border-radius:var(--rs) var(--rs) 0 0;padding:9px 15px;cursor:pointer;transition:var(--t)}
+  .tabs button:hover{color:var(--tx)}
+  .tabs button.active{color:#fff;background:var(--ac);border-color:var(--ac)}
+  pre{margin:0;background:var(--code-bg);border:1px solid var(--code-bd);border-radius:0 var(--r) var(--r) var(--r);padding:18px;overflow:auto}
+  pre code{font-size:.83rem;line-height:1.7;color:#e4e4e7;white-space:pre}
+  .cmt{color:#71717a} .kw{color:#c084fc} .str{color:#86efac} .fn{color:#7dd3fc} .num{color:#fcd34d} .nd{color:#fcd34d}
+  .panel-pad{display:none} .panel-pad.show{display:block}
+
+  /* steps */
+  ol.steps{counter-reset:s;list-style:none;padding:0;margin:0}
+  ol.steps>li{position:relative;padding:0 0 22px 52px;margin:0}
+  ol.steps>li::before{counter-increment:s;content:counter(s);position:absolute;left:0;top:-2px;width:32px;height:32px;
+    border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-weight:700;font-size:.9rem;color:#fff;background:var(--ac)}
+  ol.steps>li::after{content:"";position:absolute;left:15px;top:32px;bottom:0;width:2px;background:var(--bd)}
+  ol.steps>li:last-child::after{display:none}
+  ol.steps h4{margin:3px 0 4px;font-size:1rem}
+  ol.steps p{margin:0 0 10px;color:var(--tx3);font-size:.9rem}
+
+  .note{border-left:3px solid var(--amber);background:rgba(217,119,6,.07);padding:12px 16px;border-radius:0 var(--rs) var(--rs) 0;color:var(--tx2);font-size:.9rem}
+  .note.green{border-color:var(--ac);background:var(--ac-bg);color:var(--ac-tx)}
+  .note code{color:var(--violet)}
+
+  .reveal{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  footer{padding:36px 0 64px;color:var(--tx4);font-size:.85rem;text-align:center;border-top:1px solid var(--bd)}
+  @media(max-width:680px){.stat .big{font-size:1.55rem}}
+</style>
+</head>
+<body>
+
+<!-- ===================== TOPBAR ===================== -->
+<div class="topbar">
+  <div class="wrap">
+    <div class="brand">
+      <span class="mark">T</span> The Testing Academy
+      <span class="sep">/</span> <span class="ch">Chapter 19 · DeepEval</span>
+    </div>
+    <div class="tb-right">
+      <span class="tb-pill">Subsystem C · :8203</span>
+      <span class="tb-pill" style="color:var(--ac-tx);background:var(--ac-bg);border-color:var(--ac-bd)">deepeval 3.9.9</span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== HERO ===================== -->
+<header class="hero">
+  <div class="wrap">
+    <span class="badge"><span class="dot"></span> Chapter 19 · 03_DeepFramework</span>
+    <h1>Evaluating a real chatbot &amp; RAG system with <span class="mk">DeepEval</span></h1>
+    <p class="sub">An LLM-as-judge harness that scores two live apps — a support chatbot and a full RAG pipeline — on relevancy, faithfulness, grounding, hallucination, bias, toxicity and more. One metric registry, two ways to run it: <strong>pytest</strong> for CI and an <strong>interactive dashboard</strong> for demos.</p>
+
+    <div class="stat-row">
+      <div class="stat"><div class="big c-green" data-count="22">0</div><div class="lbl">Metrics</div></div>
+      <div class="stat"><div class="big c-amber" data-count="40">0</div><div class="lbl">Golden cases</div></div>
+      <div class="stat"><div class="big c-blue" data-count="3">0</div><div class="lbl">Judge providers</div></div>
+      <div class="stat"><div class="big c-violet" data-count="4">0</div><div class="lbl">Live services</div></div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<!-- ===================== OBJECTIVE ===================== -->
+<section class="reveal">
+  <p class="eyebrow">01 · Why</p>
+  <h2><span class="num">§1</span>The objective</h2>
+  <p class="lead">Chapter 18 evaluated single prompts. Chapter 19 goes further: evaluate <strong>whole production-shaped systems</strong>. We stand up two real apps, then point a configurable judge LLM at them and measure quality the way a QA engineer would — repeatably, with thresholds, pass/fail, and a reason for every score.</p>
+  <div class="grid">
+    <div class="card"><div class="k">Goal</div><h4>Auditable quality gates</h4><p>Turn "the bot feels good" into numbers: relevancy &ge; 0.7, hallucination &le; 0.4, etc. — enforced in CI.</p></div>
+    <div class="card"><div class="k">Goal</div><h4>Swappable judge</h4><p>Same metrics, judged by OpenAI, Groq, or a fully local Ollama model — flip one env var.</p></div>
+    <div class="card"><div class="k">Goal</div><h4>Two surfaces</h4><p>One registry feeds both a pytest suite (CI) and a click-to-run web dashboard (teaching/demo).</p></div>
+  </div>
+</section>
+
+<!-- ===================== DONE SO FAR ===================== -->
+<section class="reveal">
+  <p class="eyebrow">02 · Status</p>
+  <h2><span class="num">§2</span>What's done so far</h2>
+  <p class="lead">The plumbing is live end-to-end against both apps. Per-metric pytest files beyond answer-relevancy are still being filled in — but every metric already runs through the dashboard registry.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Piece</th><th>State</th><th>Detail</th></tr></thead>
+    <tbody>
+    <tr><td>Subsystem A — Chatbot</td><td class="ok">running</td><td>React+FastAPI+Groq, verified live (shipping/returns answers)</td></tr>
+    <tr><td>Subsystem B — RAG Explorer</td><td class="ok">running</td><td>Ollama embed + ChromaDB + Groq; seeded 21 chunks / 5 docs</td></tr>
+    <tr><td>Judge factory</td><td class="ok">done</td><td><code>CompatibleJudge</code> for OpenAI / Groq / Ollama via <code>JUDGE_PROVIDER</code></td></tr>
+    <tr><td>Golden datasets</td><td class="ok">done</td><td>19 chatbot + 13 safety prompts, 8 RAG goldens</td></tr>
+    <tr><td>Metric registry</td><td class="ok">done</td><td>22 metric × target rows (one source of truth)</td></tr>
+    <tr><td>Dashboard (:8203)</td><td class="ok">done</td><td>Live pass/fail/score/reason, switch judge on the fly</td></tr>
+    <tr><td>pytest suite</td><td class="warn">partial</td><td><code>test_00_smoke</code>, <code>test_01_answer_relevancy</code> done; <code>test_NN_*</code> pending</td></tr>
+    <tr><td>Confident AI cloud push</td><td class="warn">optional</td><td><code>deepeval test run</code> wired; runs on demand with <code>CONFIDENT_API_KEY</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ===================== ARCHITECTURE + ANIMATION ===================== -->
+<section class="reveal">
+  <p class="eyebrow">03 · Flow</p>
+  <h2><span class="num">§3</span>How the pieces connect</h2>
+  <p class="lead">The framework (C) calls each app over HTTP, wraps the response in a DeepEval <code>LLMTestCase</code>, and hands it to a metric. The metric prompts the <em>judge LLM</em>, which returns a score + reason. First the map, then watch one metric run end-to-end.</p>
+
+  <!-- hand-drawn architecture board (Excalidraw-style) -->
+  <div class="board" aria-label="DeepEval architecture map">
+    <svg viewBox="0 0 920 430" role="img" font-family="Kalam, cursive">
+      <defs>
+        <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="7" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.2"/></filter>
+        <marker id="ah" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8" fill="none" stroke="currentColor" stroke-width="1.6"/></marker>
+      </defs>
+      <g filter="url(#rough)" color="var(--tx3)">
+        <!-- connectors -->
+        <g fill="none" stroke="currentColor" stroke-width="2" marker-end="url(#ah)">
+          <path d="M240,103 C300,103 300,196 345,196"/>
+          <path d="M240,300 C300,300 305,238 345,238"/>
+          <path d="M575,196 C622,150 642,110 680,110"/>
+          <path d="M785,158 L785,250"/>
+          <path d="M680,300 C628,302 600,262 575,250"/>
+        </g>
+      </g>
+      <!-- connector labels -->
+      <g font-size="14" fill="var(--tx3)">
+        <text x="262" y="135">POST /chat</text>
+        <text x="258" y="285">POST /api</text>
+        <text x="588" y="126">metric prompt</text>
+        <text x="795" y="208">score + reason</text>
+        <text x="600" y="300">result</text>
+      </g>
+      <!-- nodes -->
+      <g filter="url(#rough)">
+        <rect x="30" y="60" width="210" height="86" rx="12" fill="#a5d8ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="30" y="256" width="210" height="92" rx="12" fill="#c3fae8" stroke="#0d9488" stroke-width="2"/>
+        <rect x="345" y="150" width="230" height="136" rx="14" fill="#d0bfff" stroke="#7c3aed" stroke-width="2.5"/>
+        <rect x="680" y="60" width="210" height="92" rx="12" fill="#ffd8a8" stroke="#d97706" stroke-width="2"/>
+        <rect x="680" y="256" width="210" height="92" rx="12" fill="#b2f2bb" stroke="#16a34a" stroke-width="2"/>
+      </g>
+      <g fill="#1f2937" text-anchor="middle">
+        <text x="135" y="92" font-size="17" font-weight="700">Subsystem A</text>
+        <text x="135" y="113" font-size="13">ShopSphere Chatbot</text>
+        <text x="135" y="131" font-size="11" font-family="JetBrains Mono, monospace">:8201 / :5173</text>
+
+        <text x="135" y="288" font-size="17" font-weight="700">Subsystem B</text>
+        <text x="135" y="309" font-size="13">RAG Explorer</text>
+        <text x="135" y="327" font-size="11" font-family="JetBrains Mono, monospace">:8202</text>
+
+        <text x="460" y="194" font-size="18" font-weight="700">Subsystem C</text>
+        <text x="460" y="216" font-size="13">DeepEval Framework</text>
+        <text x="460" y="236" font-size="12">build LLMTestCase &middot; run metric</text>
+        <text x="460" y="258" font-size="11" font-family="JetBrains Mono, monospace">:8203</text>
+
+        <text x="785" y="92" font-size="17" font-weight="700">Judge LLM</text>
+        <text x="785" y="113" font-size="13">OpenAI / Groq / Ollama</text>
+        <text x="785" y="131" font-size="11" font-family="JetBrains Mono, monospace">JUDGE_PROVIDER</text>
+
+        <text x="785" y="288" font-size="17" font-weight="700">Verdict</text>
+        <text x="785" y="309" font-size="13">score vs threshold</text>
+        <text x="785" y="327" font-size="12" font-weight="700">PASS / FAIL</text>
+      </g>
+    </svg>
+    <div class="board-cap">
+      <span>Drawn with the Excalidraw MCP &middot; apps under test &rarr; framework &rarr; judge &rarr; verdict</span>
+      <span class="lg">
+        <span><i class="sw" style="background:#a5d8ff"></i>App A</span>
+        <span><i class="sw" style="background:#c3fae8"></i>App B</span>
+        <span><i class="sw" style="background:#d0bfff"></i>Framework</span>
+        <span><i class="sw" style="background:#ffd8a8"></i>Judge</span>
+        <span><i class="sw" style="background:#b2f2bb"></i>Verdict</span>
+      </span>
+    </div>
+  </div>
+
+  <p class="lead" style="margin-top:30px">Now the loop in motion — one metric, one test case, scored by the judge and gated by a threshold. It cycles through real verdicts the framework has produced:</p>
+
+  <!-- self-running judge-loop animation -->
+  <div class="evalsim" id="evalsim">
+    <div class="esim-head">
+      <span class="esim-metric">chatbot · answer_relevancy</span>
+      <span class="esim-dir">higher is better</span>
+    </div>
+    <div class="esim-track">
+      <div class="esim-stage" data-k="0"><span class="esk">01 INPUT</span><b>User question</b><i>the prompt</i></div>
+      <div class="esim-link"></div>
+      <div class="esim-stage" data-k="1"><span class="esk">02 APP</span><b>App under test</b><i>actual_output</i></div>
+      <div class="esim-link"></div>
+      <div class="esim-stage" data-k="2"><span class="esk">03 WRAP</span><b>LLMTestCase</b><i>input + output + context</i></div>
+      <div class="esim-link"></div>
+      <div class="esim-stage" data-k="3"><span class="esk">04 JUDGE</span><b>Judge LLM</b><i>scores the rubric</i></div>
+      <div class="esim-link"></div>
+      <div class="esim-stage" data-k="4"><span class="esk">05 GATE</span><b>Threshold</b><i>pass / fail</i></div>
+    </div>
+    <div class="esim-readout">
+      <div class="gauge">
+        <div class="gauge-fill"></div>
+        <div class="gauge-thr"><span class="gauge-thr-lbl">thr 0.70</span></div>
+      </div>
+      <div class="esim-meta">
+        <span class="gauge-score">—</span>
+        <span class="esim-chip">—</span>
+      </div>
+    </div>
+    <div class="esim-reason"></div>
+  </div>
+  <p class="lead" style="font-size:.84rem;color:var(--tx4);margin-top:4px">The bar fills to the judge's score; the tick is the threshold. Quality metrics pass when the score clears the line; safety metrics flip it — the score must stay <em>under</em> the ceiling.</p>
+
+  <!-- ===== Inside Subsystem B: RAG pipeline + vector DB ===== -->
+  <h3 class="subh"><span class="t">Inside Subsystem B</span>How the RAG pipeline &amp; vector DB work</h3>
+  <p class="subh-p">The RAG Explorer does the work in two passes. <strong>Ingest</strong> runs once — split the docs, embed each chunk, write the vectors into ChromaDB. <strong>Query</strong> runs per request — embed the question, do a similarity search in the DB, hand the top-k chunks to the LLM, answer with citations.</p>
+  <div class="board" aria-label="RAG pipeline and vector database">
+    <svg viewBox="0 0 940 520" role="img" font-family="Kalam, cursive">
+      <defs>
+        <filter id="rough_p"><feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.1"/></filter>
+        <marker id="ah_p" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8" fill="none" stroke="currentColor" stroke-width="1.6"/></marker>
+      </defs>
+      <!-- lane labels -->
+      <g font-family="JetBrains Mono, monospace" font-size="13">
+        <text x="30" y="50" fill="var(--teal)">INGEST &mdash; offline, once</text>
+        <text x="30" y="318" fill="var(--blue)">QUERY &mdash; per request</text>
+      </g>
+      <!-- connectors -->
+      <g filter="url(#rough_p)" color="var(--tx3)"><g fill="none" stroke="currentColor" stroke-width="2" marker-end="url(#ah_p)">
+        <path d="M190,112 L228,112"/>
+        <path d="M390,112 L428,112"/>
+        <path d="M560,150 C620,182 645,188 690,196"/>
+        <path d="M200,392 L228,392"/>
+        <path d="M400,392 C545,360 605,300 678,262"/>
+        <path d="M760,302 L760,348"/>
+        <path d="M670,392 L632,392"/>
+        <path d="M530,434 L530,452"/>
+      </g></g>
+      <!-- connector labels -->
+      <g font-size="13" fill="var(--tx3)">
+        <text x="600" y="168">store vectors</text>
+        <text x="455" y="320">similarity search</text>
+        <text x="770" y="332">top-k</text>
+        <text x="585" y="384">context</text>
+        <text x="540" y="448">generate</text>
+      </g>
+      <!-- ingest nodes -->
+      <g filter="url(#rough_p)">
+        <rect x="30" y="70" width="160" height="84" rx="12" fill="#a5d8ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="230" y="70" width="160" height="84" rx="12" fill="#fff3bf" stroke="#b45309" stroke-width="2"/>
+        <rect x="430" y="70" width="200" height="84" rx="12" fill="#d0bfff" stroke="#7c3aed" stroke-width="2"/>
+        <rect x="430" y="350" width="200" height="84" rx="12" fill="#ffd8a8" stroke="#d97706" stroke-width="2"/>
+        <rect x="30" y="350" width="170" height="84" rx="12" fill="#a5d8ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="230" y="350" width="170" height="84" rx="12" fill="#d0bfff" stroke="#7c3aed" stroke-width="2"/>
+        <rect x="670" y="350" width="180" height="84" rx="12" fill="#fff3bf" stroke="#b45309" stroke-width="2"/>
+        <rect x="430" y="452" width="200" height="52" rx="12" fill="#b2f2bb" stroke="#16a34a" stroke-width="2"/>
+        <!-- DB cylinder -->
+        <path d="M670,150 L670,300 A90,24 0 0 0 850,300 L850,150" fill="#c3fae8" stroke="#0d9488" stroke-width="2.5"/>
+        <ellipse cx="760" cy="150" rx="90" ry="24" fill="#c3fae8" stroke="#0d9488" stroke-width="2.5"/>
+      </g>
+      <!-- node text -->
+      <g fill="#1f2937" text-anchor="middle">
+        <text x="110" y="106" font-size="15" font-weight="700">Documents</text>
+        <text x="110" y="127" font-size="12">5 source files</text>
+        <text x="310" y="106" font-size="15" font-weight="700">Chunk</text>
+        <text x="310" y="127" font-size="12">~21 pieces</text>
+        <text x="530" y="106" font-size="15" font-weight="700">Embed</text>
+        <text x="530" y="127" font-size="12">nomic-embed (Ollama)</text>
+
+        <text x="760" y="198" font-size="16" font-weight="700">ChromaDB</text>
+        <text x="760" y="220" font-size="12">vector store &middot; 21 vectors</text>
+        <text x="760" y="240" font-size="12">cosine similarity</text>
+
+        <text x="115" y="386" font-size="15" font-weight="700">User question</text>
+        <text x="115" y="407" font-size="12">"refund window?"</text>
+        <text x="315" y="386" font-size="15" font-weight="700">Embed query</text>
+        <text x="315" y="407" font-size="12">same model</text>
+        <text x="530" y="386" font-size="15" font-weight="700">LLM answer</text>
+        <text x="530" y="407" font-size="12">Groq llama-3.3</text>
+        <text x="760" y="386" font-size="15" font-weight="700">Top-k chunks</text>
+        <text x="760" y="407" font-size="12">retrieved context</text>
+        <text x="530" y="484" font-size="15" font-weight="700">Answer + citations</text>
+      </g>
+    </svg>
+    <div class="board-cap">
+      <span>Drawn with the Excalidraw MCP &middot; one DB, two passes &mdash; ingest writes, query reads</span>
+      <span class="lg">
+        <span><i class="sw" style="background:#a5d8ff"></i>I/O</span>
+        <span><i class="sw" style="background:#d0bfff"></i>Embed</span>
+        <span><i class="sw" style="background:#c3fae8"></i>Vector DB</span>
+        <span><i class="sw" style="background:#ffd8a8"></i>LLM</span>
+        <span><i class="sw" style="background:#b2f2bb"></i>Answer</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ===== Inside a metric: how DeepEval scores ===== -->
+  <h3 class="subh"><span class="t">Inside a metric</span>How DeepEval actually scores a test case</h3>
+  <p class="subh-p">Every metric ends at the same place — a number between 0 and 1 plus a written reason. A <code>GEval</code> metric hands the judge a plain-English rubric and lets it reason step by step (chain-of-thought) before grading; built-in metrics ship their own rubric. <code>is_successful()</code> then compares the score to the threshold in the right direction.</p>
+  <div class="board" aria-label="How a DeepEval metric scores">
+    <svg viewBox="0 0 860 400" role="img" font-family="Kalam, cursive">
+      <defs>
+        <filter id="rough_g"><feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="11" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.1"/></filter>
+        <marker id="ah_g" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8" fill="none" stroke="currentColor" stroke-width="1.6"/></marker>
+      </defs>
+      <g filter="url(#rough_g)" color="var(--tx3)"><g fill="none" stroke="currentColor" stroke-width="2" marker-end="url(#ah_g)">
+        <path d="M260,106 L298,106"/>
+        <path d="M530,106 L568,106"/>
+        <path d="M690,152 L690,228"/>
+        <path d="M570,276 L532,276"/>
+        <path d="M300,258 L192,242"/>
+        <path d="M300,300 L192,326"/>
+      </g></g>
+      <g font-size="13" fill="var(--tx3)">
+        <text x="300" y="242">pass</text>
+        <text x="300" y="338">fail</text>
+      </g>
+      <g filter="url(#rough_g)">
+        <rect x="30" y="60" width="230" height="92" rx="12" fill="#d0bfff" stroke="#7c3aed" stroke-width="2"/>
+        <rect x="300" y="60" width="230" height="92" rx="12" fill="#eebefa" stroke="#a21caf" stroke-width="2"/>
+        <rect x="570" y="60" width="240" height="92" rx="12" fill="#ffd8a8" stroke="#d97706" stroke-width="2.5"/>
+        <rect x="570" y="230" width="240" height="92" rx="12" fill="#fff3bf" stroke="#b45309" stroke-width="2"/>
+        <rect x="300" y="230" width="230" height="92" rx="12" fill="#c3fae8" stroke="#0d9488" stroke-width="2"/>
+        <rect x="40" y="212" width="150" height="54" rx="12" fill="#b2f2bb" stroke="#16a34a" stroke-width="2"/>
+        <rect x="40" y="300" width="150" height="54" rx="12" fill="#ffc9c9" stroke="#dc2626" stroke-width="2"/>
+      </g>
+      <g fill="#1f2937" text-anchor="middle">
+        <text x="145" y="96" font-size="15" font-weight="700">LLMTestCase</text>
+        <text x="145" y="117" font-size="12">input + actual_output</text>
+        <text x="145" y="135" font-size="12">+ context</text>
+        <text x="415" y="96" font-size="15" font-weight="700">Metric builds</text>
+        <text x="415" y="117" font-size="12">the judge prompt</text>
+        <text x="415" y="135" font-size="12">criteria + params</text>
+        <text x="690" y="96" font-size="15" font-weight="700">Judge LLM</text>
+        <text x="690" y="117" font-size="12">drafts evaluation steps</text>
+        <text x="690" y="135" font-size="12">(chain-of-thought)</text>
+        <text x="690" y="270" font-size="15" font-weight="700">Scores 0.00&ndash;1.00</text>
+        <text x="690" y="291" font-size="12">+ writes a reason</text>
+        <text x="415" y="266" font-size="14" font-weight="700">is_successful()</text>
+        <text x="415" y="286" font-size="12">score vs threshold</text>
+        <text x="415" y="304" font-size="12">+ direction</text>
+        <text x="115" y="245" font-size="16" font-weight="700">PASS</text>
+        <text x="115" y="333" font-size="16" font-weight="700">FAIL</text>
+      </g>
+    </svg>
+    <div class="board-cap">
+      <span>Drawn with the Excalidraw MCP &middot; the judge reasons, then grades against the threshold</span>
+      <span class="lg">
+        <span><i class="sw" style="background:#ffd8a8"></i>Judge</span>
+        <span><i class="sw" style="background:#c3fae8"></i>Gate</span>
+        <span><i class="sw" style="background:#b2f2bb"></i>Pass</span>
+        <span><i class="sw" style="background:#ffc9c9"></i>Fail</span>
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== COMPONENTS ===================== -->
+<section class="reveal">
+  <p class="eyebrow">04 · Parts</p>
+  <h2><span class="num">§4</span>The components</h2>
+  <p class="lead">Everything in <code>03_DeepFramework/</code>. The dashboard and the pytest suite import the <em>same</em> modules — no duplicated logic.</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Path</th><th>Role</th></tr></thead>
+    <tbody>
+    <tr><td><code>llm_providers/base.py</code></td><td><code>CompatibleJudge(DeepEvalBaseLLM)</code> — one judge class for all 3 providers (OpenAI-compatible wire + <code>instructor</code> for structured output)</td></tr>
+    <tr><td><code>llm_providers/factory.py</code></td><td><code>get_judge()</code> reads <code>JUDGE_PROVIDER</code> and builds the judge (model, base_url, key)</td></tr>
+    <tr><td><code>targets/chatbot.py</code></td><td>HTTP client → Subsystem A (<code>/chat</code>, <code>/health</code>)</td></tr>
+    <tr><td><code>targets/rag_pipeline.py</code></td><td>HTTP client → Subsystem B (<code>/api/chat</code>, <code>/api/search</code>, <code>/api/ingest/seed</code>)</td></tr>
+    <tr><td><code>datasets/chatbot_goldens.py</code></td><td>19 golden Q&amp;A + 13 adversarial safety prompts</td></tr>
+    <tr><td><code>datasets/rag_goldens.py</code></td><td>8 golden Q&amp;A with expected sources / context keywords</td></tr>
+    <tr><td><code>dashboard/registry.py</code></td><td>22 <code>MetricDef</code> rows — the single source of truth</td></tr>
+    <tr><td><code>dashboard/runner.py</code></td><td>Runs one registry metric end-to-end → JSON result</td></tr>
+    <tr><td><code>dashboard/app.py</code></td><td>FastAPI app on <code>:8203</code> (interactive UI + REST)</td></tr>
+    <tr><td><code>conftest.py</code> · <code>pytest.ini</code></td><td>Fixtures (judge / targets / goldens), <code>.env</code> loading, liveness auto-skip, markers</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ===================== WHAT WE TESTED ===================== -->
+<section class="reveal">
+  <p class="eyebrow">05 · Coverage</p>
+  <h2><span class="num">§5</span>What we measure (the 22 metrics)</h2>
+  <p class="lead">Direction matters: for quality metrics a higher score is better (threshold is a floor); for safety metrics a lower score is better (threshold is a ceiling). DeepEval handles the inversion via <code>is_successful()</code>.</p>
+
+  <!-- ===== The metric catalog ===== -->
+  <div class="board" aria-label="The 22-metric catalog">
+    <svg viewBox="0 0 940 640" role="img" font-family="Kalam, cursive">
+      <defs>
+        <filter id="rough_c"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="5" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2"/></filter>
+        <marker id="ah_c" markerWidth="11" markerHeight="11" refX="8" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8" fill="none" stroke="currentColor" stroke-width="1.6"/></marker>
+      </defs>
+      <!-- connectors -->
+      <g filter="url(#rough_c)" color="var(--tx3)"><g fill="none" stroke="currentColor" stroke-width="2" marker-end="url(#ah_c)">
+        <path d="M430,92 C360,108 300,118 250,138"/>
+        <path d="M510,92 C600,108 660,118 700,138"/>
+        <path d="M210,204 C150,222 130,232 120,246"/>
+        <path d="M212,204 C150,300 120,360 110,366"/>
+        <path d="M214,204 C150,420 120,480 105,486"/>
+        <path d="M730,204 C790,222 810,232 820,246"/>
+        <path d="M728,204 C790,300 820,360 830,366"/>
+        <path d="M726,204 C790,420 820,480 835,486"/>
+      </g></g>
+      <!-- root + hubs -->
+      <g filter="url(#rough_c)">
+        <rect x="370" y="20" width="200" height="72" rx="12" fill="#d0bfff" stroke="#7c3aed" stroke-width="2.5"/>
+        <rect x="150" y="140" width="170" height="64" rx="12" fill="#a5d8ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="620" y="140" width="170" height="64" rx="12" fill="#c3fae8" stroke="#0d9488" stroke-width="2"/>
+        <rect x="30" y="250" width="290" height="96" rx="12" fill="#a5d8ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="30" y="372" width="290" height="96" rx="12" fill="#ffc9c9" stroke="#dc2626" stroke-width="2"/>
+        <rect x="30" y="494" width="290" height="96" rx="12" fill="#fff3bf" stroke="#b45309" stroke-width="2"/>
+        <rect x="620" y="250" width="290" height="96" rx="12" fill="#c3fae8" stroke="#0d9488" stroke-width="2"/>
+        <rect x="620" y="372" width="290" height="96" rx="12" fill="#a5d8ff" stroke="#2563eb" stroke-width="2"/>
+        <rect x="620" y="494" width="290" height="96" rx="12" fill="#d0bfff" stroke="#7c3aed" stroke-width="2"/>
+      </g>
+      <!-- text -->
+      <g fill="#1f2937" text-anchor="middle">
+        <text x="470" y="50" font-size="16" font-weight="700">22 metrics</text>
+        <text x="470" y="72" font-size="12">one registry, one source of truth</text>
+        <text x="235" y="179" font-size="19" font-weight="700">CHATBOT</text>
+        <text x="705" y="179" font-size="19" font-weight="700">RAG</text>
+
+        <text x="175" y="282" font-size="15" font-weight="700">Quality</text>
+        <text x="175" y="305" font-size="13">Relevancy &middot; Faithfulness</text>
+        <text x="175" y="325" font-size="13">Hallucination &middot; Completeness</text>
+        <text x="175" y="404" font-size="15" font-weight="700">Safety</text>
+        <text x="175" y="427" font-size="13">Bias &middot; Toxicity</text>
+        <text x="175" y="447" font-size="13">PII Leak &middot; Prompt-leak</text>
+        <text x="175" y="526" font-size="15" font-weight="700">Conversational</text>
+        <text x="175" y="549" font-size="13">Conversation Completeness</text>
+        <text x="175" y="569" font-size="13">Knowledge Retention</text>
+
+        <text x="765" y="282" font-size="15" font-weight="700">Retrieval</text>
+        <text x="765" y="305" font-size="13">Contextual Precision</text>
+        <text x="765" y="325" font-size="13">Recall &middot; Relevancy</text>
+        <text x="765" y="404" font-size="15" font-weight="700">Quality</text>
+        <text x="765" y="427" font-size="13">Faithfulness &middot; Answer Relevancy</text>
+        <text x="765" y="447" font-size="13">Hallucination &middot; Correctness</text>
+        <text x="765" y="526" font-size="15" font-weight="700">G-Eval</text>
+        <text x="765" y="549" font-size="13">Citation Quality</text>
+        <text x="765" y="569" font-size="13">Helpfulness</text>
+      </g>
+      <!-- direction note -->
+      <g font-family="JetBrains Mono, monospace" font-size="13" fill="var(--tx3)" text-anchor="middle">
+        <text x="470" y="622">Quality &rarr; higher is better (floor)      Safety &rarr; lower is better (ceiling)</text>
+      </g>
+    </svg>
+    <div class="board-cap">
+      <span>Drawn with the Excalidraw MCP &middot; 6 families across 2 systems &mdash; the registry the dashboard renders from</span>
+      <span class="lg">
+        <span><i class="sw" style="background:#a5d8ff"></i>Quality</span>
+        <span><i class="sw" style="background:#ffc9c9"></i>Safety</span>
+        <span><i class="sw" style="background:#c3fae8"></i>Retrieval</span>
+        <span><i class="sw" style="background:#d0bfff"></i>G-Eval</span>
+      </span>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><div class="k">Chatbot · quality</div><h4>Relevancy · Faithfulness · Hallucination · Completeness (G-Eval)</h4><p>Stays on topic, grounded in policy, no contradictions, covers every key fact.</p></div>
+    <div class="card"><div class="k">Chatbot · safety</div><h4>Bias · Toxicity · PII Leakage · No-Prompt-Leak (G-Eval)</h4><p>Refuses adversarial / biased prompts; never reveals the system prompt.</p></div>
+    <div class="card"><div class="k">Chatbot · conversational</div><h4>Conversation Completeness · Knowledge Retention</h4><p>Multi-turn: remembers earlier turns, satisfies intent across the dialog.</p></div>
+    <div class="card"><div class="k">RAG · retrieval</div><h4>Contextual Precision · Recall · Relevancy</h4><p>Right chunks ranked first, nothing missing, little noise.</p></div>
+    <div class="card"><div class="k">RAG · quality</div><h4>Faithfulness · Answer Relevancy · Hallucination · Correctness (G-Eval)</h4><p>Answer grounded in retrieved context and factually matches the golden.</p></div>
+    <div class="card"><div class="k">RAG · G-Eval</div><h4>Citation Quality · Helpfulness</h4><p>Cites a real source filename; gives a specific, actionable answer.</p></div>
+  </div>
+  <p class="lead" style="margin-top:24px">Verified live so far:</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Run</th><th>Result</th><th>Notes</th></tr></thead>
+    <tbody>
+    <tr><td><code>pytest test_01</code> (chatbot answer relevancy, 19 goldens)</td><td class="ok">16 / 19 pass</td><td>3 dinged to 0.50 for bundling extra facts (correct but verbose) — legit signal</td></tr>
+    <tr><td>dashboard · <code>chatbot.answer_relevancy</code></td><td class="ok">1.00 ✓</td><td>"directly addressed the refund window with no irrelevant content"</td></tr>
+    <tr><td>dashboard · <code>rag.contextual_recall</code></td><td class="ok">1.00 ✓</td><td>both expected facts supported by retrieved nodes</td></tr>
+    <tr><td>dashboard · <code>rag.hallucination</code></td><td class="ok">0.00 ✓</td><td>lower is better — output fully aligned with context</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- ===================== VERSIONS ===================== -->
+<section class="reveal">
+  <p class="eyebrow">06 · Stack</p>
+  <h2><span class="num">§6</span>Versions we're pinned to</h2>
+  <div class="note">DeepEval is pinned to <strong>3.9.9</strong>. The latest release (<strong>4.0.6</strong>) ships a broken <code>deepeval test run</code> CLI — its code does <code>from deepeval.deepeval.config.settings import …</code> (a typo; there is no nested <code>deepeval/deepeval/</code> package). The <em>library</em> works fine; only the CLI entrypoint crashes. 3.9.9 is the last release whose CLI works <em>and</em> still has every metric the registry uses (PII Leakage, Knowledge Retention, Conversation Completeness).</div>
+  <div class="tbl-wrap" style="margin-top:16px"><table>
+    <thead><tr><th>Layer</th><th>Package</th><th>Version</th></tr></thead>
+    <tbody>
+    <tr><td>Runtime</td><td>Python</td><td><code>3.13.3</code></td></tr>
+    <tr><td>Eval core</td><td>deepeval</td><td><code>3.9.9</code> (pinned)</td></tr>
+    <tr><td>Judge client</td><td>openai</td><td><code>2.43.0</code></td></tr>
+    <tr><td>Judge client</td><td>groq</td><td><code>1.4.0</code></td></tr>
+    <tr><td>Structured output</td><td>instructor</td><td><code>1.15.3</code></td></tr>
+    <tr><td>Dashboard</td><td>fastapi / uvicorn / jinja2</td><td><code>0.115.0 / 0.32.0 / 3.1.4</code></td></tr>
+    <tr><td>Models / validation</td><td>pydantic</td><td><code>2.13.4</code></td></tr>
+    <tr><td>Test runner</td><td>pytest</td><td><code>9.1.1</code></td></tr>
+    </tbody>
+  </table></div>
+  <p class="lead" style="margin-top:16px">Judge models per provider:</p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>JUDGE_PROVIDER</th><th>Default model</th><th>Key / host</th></tr></thead>
+    <tbody>
+    <tr><td><code>openai</code></td><td><code>gpt-4o-mini</code></td><td><code>OPENAI_API_KEY</code> — best for large runs (high limits)</td></tr>
+    <tr><td><code>groq</code></td><td><code>openai/gpt-oss-120b</code></td><td><code>GROQ_API_KEY</code> — free tier caps 8000 TPM</td></tr>
+    <tr><td><code>ollama</code></td><td><code>gpt-oss:20b</code></td><td><code>localhost:11434</code> — fully local, no key</td></tr>
+    </tbody>
+  </table></div>
+  <p class="lead" style="margin-top:12px">Apps under test bring their own pins: chatbot uses Groq <code>llama-3.3-70b-versatile</code>; RAG uses <code>nomic-embed-text</code> (Ollama) + ChromaDB + Groq.</p>
+</section>
+
+<!-- ===================== HOW TO RUN ===================== -->
+<section class="reveal">
+  <p class="eyebrow">07 · Run it</p>
+  <h2><span class="num">§7</span>How to run the commands</h2>
+  <p class="lead">Start both apps first (A on <code>:8201</code>/<code>:5173</code>, B on <code>:8202</code>), then pick a surface. <code>.env</code> is loaded automatically by <code>conftest.py</code> / the dashboard.</p>
+  <div class="tabs" id="tabs">
+    <button class="active" data-t="setup">setup</button>
+    <button data-t="pytest">pytest (CI)</button>
+    <button data-t="cloud">deepeval test run</button>
+    <button data-t="dash">dashboard</button>
+  </div>
+
+  <div class="panel-pad show" data-p="setup"><pre><code><span class="cmt"># from Chapter_19_DeepEval_Framework/03_DeepFramework</span>
+python3 -m venv venv <span class="kw">&amp;&amp;</span> <span class="kw">source</span> venv/bin/activate
+pip install -r requirements.txt          <span class="cmt"># pins deepeval==3.9.9 + FastAPI</span>
+
+<span class="cmt"># .env (gitignored) — set keys + choose the judge</span>
+<span class="cmt"># GROQ_API_KEY=gsk_...   OPENAI_API_KEY=sk-...   JUDGE_PROVIDER=openai</span></code></pre></div>
+
+  <div class="panel-pad" data-p="pytest"><pre><code><span class="cmt"># per-golden test cases, CI-style</span>
+<span class="kw">export</span> JUDGE_PROVIDER=openai            <span class="cmt"># or groq / ollama</span>
+pytest tests/chatbot/test_01_chatbot_answer_relevancy.py -v
+
+<span class="cmt"># filter by marker</span>
+pytest -m <span class="str">"chatbot and quality"</span> -v
+pytest -m needs_rag -v                    <span class="cmt"># auto-skips if RAG is down</span></code></pre></div>
+
+  <div class="panel-pad" data-p="cloud"><pre><code><span class="cmt"># same test, results pushed to the Confident AI cloud dashboard</span>
+<span class="kw">export</span> CONFIDENT_API_KEY=confident_...
+deepeval test run tests/chatbot/test_01_chatbot_answer_relevancy.py
+
+<span class="cmt"># tip: use the OpenAI judge here — Groq's free 8000 TPM cap</span>
+<span class="cmt"># gets exceeded when deepeval fans out judge calls.</span></code></pre></div>
+
+  <div class="panel-pad" data-p="dash"><pre><code><span class="cmt"># interactive: click any metric, watch live pass/fail/score/reason</span>
+uvicorn dashboard.app:app --port <span class="num">8203</span>
+<span class="cmt"># open http://localhost:8203 — switch judge provider in the UI</span>
+
+<span class="cmt"># or hit the REST API directly</span>
+curl -X POST localhost:8203/api/run \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{"metric_id":"rag.faithfulness","sample_idx":0}'</span></code></pre></div>
+</section>
+
+<!-- ===================== ADD A METRIC ===================== -->
+<section class="reveal">
+  <p class="eyebrow">08 · Extend</p>
+  <h2><span class="num">§8</span>How to add another metric</h2>
+  <p class="lead">Because the registry is the single source of truth, adding a metric is mostly one row. It shows up in the dashboard instantly; the matching pytest file is optional.</p>
+  <ol class="steps">
+    <li>
+      <h4>Pick or write the metric</h4>
+      <p>Use a built-in DeepEval metric, or define a <code>GEval</code> with a plain-English rubric. Add a tiny factory in <code>registry.py</code>:</p>
+      <pre style="border-radius:var(--r)"><code><span class="kw">def</span> <span class="fn">_geval_conciseness</span>(j, t):
+    <span class="kw">return</span> <span class="fn">GEval</span>(
+        name=<span class="str">"Conciseness"</span>,
+        criteria=<span class="str">"Penalise answers that pad with facts the question didn't ask for."</span>,
+        evaluation_params=[LLMTestCaseParams.INPUT, LLMTestCaseParams.ACTUAL_OUTPUT],
+        model=j, threshold=t,
+    )</code></pre>
+    </li>
+    <li>
+      <h4>Register one row</h4>
+      <p>Append a <code>MetricDef</code> to <code>REGISTRY</code>. <code>higher_is_better</code> sets the threshold direction; <code>sample_kind</code> tells the runner which dataset to pull (<code>golden</code> / <code>safety</code> / <code>pii_probe</code> / <code>summary</code> / <code>conversation</code>).</p>
+      <pre style="border-radius:var(--r)"><code><span class="fn">MetricDef</span>(<span class="str">"chatbot.conciseness"</span>, <span class="str">"G-Eval · Conciseness"</span>,
+    <span class="str">"Answer avoids unasked-for extras."</span>, <span class="str">"geval"</span>, <span class="str">"chatbot"</span>,
+    <span class="num">0.6</span>, <span class="kw">True</span>, <span class="str">"golden"</span>, _geval_conciseness,
+    [<span class="str">"input"</span>, <span class="str">"actual_output"</span>]),</code></pre>
+    </li>
+    <li>
+      <h4>(Optional) add a pytest file</h4>
+      <p>For CI + Confident AI capture, mirror it as <code>tests/test_NN_*.py</code> using <code>assert_test</code> so each golden becomes a captured test case:</p>
+      <pre style="border-radius:var(--r)"><code><span class="nd">@pytest.mark.parametrize</span>(<span class="str">"golden"</span>, CHATBOT_GOLDENS, ids=<span class="kw">lambda</span> g: g.input[:<span class="num">45</span>])
+<span class="kw">def</span> <span class="fn">test_conciseness</span>(chatbot, judge, golden):
+    reply = chatbot.<span class="fn">chat</span>(golden.input).reply
+    tc = <span class="fn">LLMTestCase</span>(input=golden.input, actual_output=reply)
+    <span class="fn">assert_test</span>(tc, [<span class="fn">_geval_conciseness</span>(judge, <span class="num">0.6</span>)])</code></pre>
+    </li>
+    <li>
+      <h4>(If it needs new data) extend the goldens</h4>
+      <p>Add cases to <code>datasets/chatbot_goldens.py</code> or <code>rag_goldens.py</code>. Fill the fields the metric's <code>requires</code> list names — e.g. <code>expected_output</code> for correctness, <code>context</code> for hallucination.</p>
+    </li>
+  </ol>
+  <div class="note green" style="margin-top:10px">That's it — restart the dashboard and the new metric is a clickable button. No UI edits needed; <code>app.py</code> renders straight from the registry.</div>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    The Testing Academy · AI Tester Blueprint 2x · Chapter 19 · DeepEval Framework (Subsystem C)<br/>
+    Generated overview · deepeval 3.9.9 · Python 3.13 · judge: OpenAI / Groq / Ollama
+  </div>
+</footer>
+
+<script>
+  // tabs
+  const tabs = document.getElementById('tabs');
+  if(tabs){
+    tabs.addEventListener('click', e=>{
+      const b = e.target.closest('button'); if(!b) return;
+      tabs.querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
+      document.querySelectorAll('[data-p]').forEach(p=>p.classList.toggle('show', p.dataset.p===b.dataset.t));
+    });
+  }
+
+  // scroll reveal
+  const io = new IntersectionObserver((es)=>{
+    es.forEach(en=>{ if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target);} });
+  }, {threshold:.12});
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+  // count-up
+  function countUp(el){
+    const target = +el.dataset.count; const dur=1100; const t0=performance.now();
+    function tick(t){ const p=Math.min(1,(t-t0)/dur); el.textContent=Math.round(target*(1-Math.pow(1-p,3))); if(p<1)requestAnimationFrame(tick); }
+    requestAnimationFrame(tick);
+  }
+  const cio = new IntersectionObserver((es)=>{
+    es.forEach(en=>{ if(en.isIntersecting){ countUp(en.target); cio.unobserve(en.target);} });
+  }, {threshold:.6});
+  document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
+
+  // ---------- self-running judge-loop animation ----------
+  const sim = document.getElementById('evalsim');
+  if(sim){
+    const stages=[...sim.querySelectorAll('.esim-stage')];
+    const gFill=sim.querySelector('.gauge-fill');
+    const gThr=sim.querySelector('.gauge-thr');
+    const gThrLbl=sim.querySelector('.gauge-thr-lbl');
+    const gScore=sim.querySelector('.gauge-score');
+    const chip=sim.querySelector('.esim-chip');
+    const reason=sim.querySelector('.esim-reason');
+    const mlabel=sim.querySelector('.esim-metric');
+    const dirEl=sim.querySelector('.esim-dir');
+    const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+    const SCN=[
+      {m:'chatbot · answer_relevancy', dir:'up',   score:1.00, thr:0.70, reason:'Directly addressed the refund window — no irrelevant content.'},
+      {m:'rag · faithfulness',         dir:'up',   score:0.86, thr:0.70, reason:'Every claim traces back to a retrieved chunk.'},
+      {m:'rag · contextual_recall',    dir:'up',   score:1.00, thr:0.70, reason:'Both expected facts supported by retrieved nodes.'},
+      {m:'rag · hallucination',        dir:'down', score:0.00, thr:0.40, reason:'Output fully aligned with context — nothing invented.'},
+      {m:'chatbot · bias (safety)',    dir:'down', score:0.55, thr:0.30, reason:'Mild loaded phrasing — exceeds the 0.30 ceiling.'},
+    ];
+    let i=0;
+    async function run(){
+      while(true){
+        const s=SCN[i];
+        stages.forEach(x=>x.classList.remove('active','judging'));
+        chip.className='esim-chip'; chip.textContent='—';
+        reason.textContent=''; mlabel.textContent=s.m;
+        dirEl.textContent = s.dir==='up' ? 'higher is better' : 'lower is better (ceiling)';
+        gFill.style.width='0%'; gFill.className='gauge-fill';
+        gThr.style.left=(s.thr*100)+'%';
+        gThrLbl.textContent='thr '+s.thr.toFixed(2);
+        gScore.textContent='—';
+        await sleep(550);
+        for(let k=0;k<stages.length;k++){
+          stages[k].classList.add('active');
+          if(k===3){ stages[k].classList.add('judging'); await sleep(1000); stages[k].classList.remove('judging'); }
+          else await sleep(520);
+        }
+        gFill.style.width=(s.score*100)+'%';
+        gScore.textContent=s.score.toFixed(2);
+        await sleep(740);
+        const pass = s.dir==='up' ? s.score>=s.thr : s.score<=s.thr;
+        gFill.classList.add(pass?'pass':'fail');
+        chip.classList.add(pass?'pass':'fail');
+        chip.textContent = pass?'PASS ✓':'FAIL ✕';
+        reason.textContent = '“'+s.reason+'”';
+        await sleep(2200);
+        i=(i+1)%SCN.length;
+      }
+    }
+    const sio=new IntersectionObserver(es=>{es.forEach(e=>{ if(e.isIntersecting){ run(); sio.disconnect(); } })},{threshold:.3});
+    sio.observe(sim);
+  }
+</script>
+</body>
+</html>
